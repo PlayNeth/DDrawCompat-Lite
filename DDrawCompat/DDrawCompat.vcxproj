@@ -1,0 +1,353 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project DefaultTargets="Build" ToolsVersion="15.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup Label="ProjectConfigurations">
+    <ProjectConfiguration Include="Debug|Win32">
+      <Configuration>Debug</Configuration>
+      <Platform>Win32</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="ReleaseWithDebugLogs|Win32">
+      <Configuration>ReleaseWithDebugLogs</Configuration>
+      <Platform>Win32</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="Release|Win32">
+      <Configuration>Release</Configuration>
+      <Platform>Win32</Platform>
+    </ProjectConfiguration>
+  </ItemGroup>
+  <PropertyGroup Label="Globals">
+    <ProjectGuid>{1146187A-17DE-4350-B9D1-9F9EAA934908}</ProjectGuid>
+    <Keyword>Win32Proj</Keyword>
+    <RootNamespace>DDrawCompat</RootNamespace>
+    <WindowsTargetPlatformVersion>10.0.19041.0</WindowsTargetPlatformVersion>
+    <DisableFastUpToDateCheck>true</DisableFastUpToDateCheck>
+  </PropertyGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'" Label="Configuration">
+    <ConfigurationType>DynamicLibrary</ConfigurationType>
+    <UseDebugLibraries>true</UseDebugLibraries>
+    <PlatformToolset>v142</PlatformToolset>
+    <CharacterSet>NotSet</CharacterSet>
+    <SpectreMitigation>false</SpectreMitigation>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'" Label="Configuration">
+    <ConfigurationType>DynamicLibrary</ConfigurationType>
+    <UseDebugLibraries>false</UseDebugLibraries>
+    <PlatformToolset>v142</PlatformToolset>
+    <CharacterSet>NotSet</CharacterSet>
+    <SpectreMitigation>false</SpectreMitigation>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='ReleaseWithDebugLogs|Win32'" Label="Configuration">
+    <ConfigurationType>DynamicLibrary</ConfigurationType>
+    <UseDebugLibraries>false</UseDebugLibraries>
+    <PlatformToolset>v142</PlatformToolset>
+    <CharacterSet>NotSet</CharacterSet>
+    <SpectreMitigation>false</SpectreMitigation>
+  </PropertyGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.props" />
+  <ImportGroup Label="ExtensionSettings">
+  </ImportGroup>
+  <ImportGroup Label="Shared">
+  </ImportGroup>
+  <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+  </ImportGroup>
+  <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+  </ImportGroup>
+  <ImportGroup Condition="'$(Configuration)|$(Platform)'=='ReleaseWithDebugLogs|Win32'" Label="PropertySheets">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+  </ImportGroup>
+  <PropertyGroup Label="UserMacros" />
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
+    <TargetName>ddraw</TargetName>
+    <LinkIncremental>false</LinkIncremental>
+    <IncludePath>$(ProjectDir);$(IncludePath)</IncludePath>
+    <LibraryPath>$(LibraryPath)</LibraryPath>
+    <GenerateManifest>false</GenerateManifest>
+    <IntDir>$(SolutionDir)Build\$(Configuration)\</IntDir>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
+    <TargetName>ddraw</TargetName>
+    <IncludePath>$(ProjectDir);$(IncludePath)</IncludePath>
+    <LibraryPath>$(LibraryPath)</LibraryPath>
+    <LinkIncremental>false</LinkIncremental>
+    <GenerateManifest>false</GenerateManifest>
+    <IntDir>$(SolutionDir)Build\$(Configuration)\</IntDir>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='ReleaseWithDebugLogs|Win32'">
+    <TargetName>ddraw</TargetName>
+    <IncludePath>$(ProjectDir);$(IncludePath)</IncludePath>
+    <LibraryPath>$(LibraryPath)</LibraryPath>
+    <LinkIncremental>false</LinkIncremental>
+    <GenerateManifest>false</GenerateManifest>
+    <IntDir>$(SolutionDir)Build\$(Configuration)\</IntDir>
+  </PropertyGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
+    <ClCompile>
+      <PrecompiledHeader>
+      </PrecompiledHeader>
+      <WarningLevel>Level4</WarningLevel>
+      <PreprocessorDefinitions>DEBUGLOGS;WIN32_LEAN_AND_MEAN;CINTERFACE;_NO_DDRAWINT_NO_COM;PSAPI_VERSION=1;WIN32;_DEBUG;_WINDOWS;_USRDLL;DDRAWCOMPAT_EXPORTS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <RuntimeLibrary>MultiThreadedDebug</RuntimeLibrary>
+      <MultiProcessorCompilation>true</MultiProcessorCompilation>
+      <MinimalRebuild>false</MinimalRebuild>
+      <ObjectFileName>$(IntDir)%(RelativeDir)</ObjectFileName>
+      <DebugInformationFormat>ProgramDatabase</DebugInformationFormat>
+      <LanguageStandard>stdcpp17</LanguageStandard>
+    </ClCompile>
+    <Link>
+      <AdditionalDependencies>dbgeng.lib;dxguid.lib;msimg32.lib;oleacc.lib;uxtheme.lib;dwmapi.lib;winmm.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <GenerateDebugInformation>DebugFull</GenerateDebugInformation>
+      <OptimizeReferences>true</OptimizeReferences>
+      <ImportLibrary>$(IntDir)$(TargetName).lib</ImportLibrary>
+    </Link>
+    <PreBuildEvent>
+      <Command>powershell.exe -NonInteractive -NoProfile -ExecutionPolicy Unrestricted -File genversion.ps1 "$(IntDir)version.h"</Command>
+      <Message>Generating version information</Message>
+    </PreBuildEvent>
+    <ResourceCompile>
+      <AdditionalIncludeDirectories>$(IntDir)</AdditionalIncludeDirectories>
+      <PreprocessorDefinitions>SPECIALBUILD=\"$(Configuration)\"</PreprocessorDefinitions>
+    </ResourceCompile>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
+    <ClCompile>
+      <PrecompiledHeader>
+      </PrecompiledHeader>
+      <WarningLevel>Level4</WarningLevel>
+      <PreprocessorDefinitions>WIN32_LEAN_AND_MEAN;CINTERFACE;_NO_DDRAWINT_NO_COM;PSAPI_VERSION=1;WIN32;NDEBUG;_WINDOWS;_USRDLL;DDRAWCOMPAT_EXPORTS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <RuntimeLibrary>MultiThreaded</RuntimeLibrary>
+      <MultiProcessorCompilation>true</MultiProcessorCompilation>
+      <ObjectFileName>$(IntDir)%(RelativeDir)</ObjectFileName>
+      <LanguageStandard>stdcpp17</LanguageStandard>
+    </ClCompile>
+    <Link>
+      <AdditionalDependencies>dbgeng.lib;dxguid.lib;msimg32.lib;oleacc.lib;uxtheme.lib;dwmapi.lib;winmm.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <GenerateDebugInformation>DebugFull</GenerateDebugInformation>
+      <OptimizeReferences>true</OptimizeReferences>
+      <ImportLibrary>$(IntDir)$(TargetName).lib</ImportLibrary>
+    </Link>
+    <PreBuildEvent>
+      <Command>powershell.exe -NonInteractive -NoProfile -ExecutionPolicy Unrestricted -File genversion.ps1 "$(IntDir)version.h"</Command>
+      <Message>Generating version information</Message>
+    </PreBuildEvent>
+    <ResourceCompile>
+      <AdditionalIncludeDirectories>$(IntDir)</AdditionalIncludeDirectories>
+    </ResourceCompile>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='ReleaseWithDebugLogs|Win32'">
+    <ClCompile>
+      <PrecompiledHeader>
+      </PrecompiledHeader>
+      <WarningLevel>Level4</WarningLevel>
+      <PreprocessorDefinitions>DEBUGLOGS;WIN32_LEAN_AND_MEAN;CINTERFACE;_NO_DDRAWINT_NO_COM;PSAPI_VERSION=1;WIN32;NDEBUG;_WINDOWS;_USRDLL;DDRAWCOMPAT_EXPORTS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <RuntimeLibrary>MultiThreaded</RuntimeLibrary>
+      <MultiProcessorCompilation>true</MultiProcessorCompilation>
+      <ObjectFileName>$(IntDir)%(RelativeDir)</ObjectFileName>
+      <LanguageStandard>stdcpp17</LanguageStandard>
+    </ClCompile>
+    <Link>
+      <AdditionalDependencies>dbgeng.lib;dxguid.lib;msimg32.lib;oleacc.lib;uxtheme.lib;dwmapi.lib;winmm.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <GenerateDebugInformation>DebugFull</GenerateDebugInformation>
+      <OptimizeReferences>true</OptimizeReferences>
+      <ImportLibrary>$(IntDir)$(TargetName).lib</ImportLibrary>
+    </Link>
+    <PreBuildEvent>
+      <Command>powershell.exe -NonInteractive -NoProfile -ExecutionPolicy Unrestricted -File genversion.ps1 "$(IntDir)version.h"</Command>
+      <Message>Generating version information</Message>
+    </PreBuildEvent>
+    <ResourceCompile>
+      <AdditionalIncludeDirectories>$(IntDir)</AdditionalIncludeDirectories>
+      <PreprocessorDefinitions>SPECIALBUILD=\"$(Configuration)\"</PreprocessorDefinitions>
+    </ResourceCompile>
+  </ItemDefinitionGroup>
+  <ItemGroup>
+    <ClInclude Include="Common\CompatPtr.h" />
+    <ClInclude Include="Common\CompatQueryInterface.h" />
+    <ClInclude Include="Common\CompatRef.h" />
+    <ClInclude Include="Common\CompatVtable.h" />
+    <ClInclude Include="Common\CompatWeakPtr.h" />
+    <ClInclude Include="Common\HResultException.h" />
+    <ClInclude Include="Common\Log.h" />
+    <ClInclude Include="Common\Path.h" />
+    <ClInclude Include="Common\ScopedSrwLock.h" />
+    <ClInclude Include="Common\VtableHookVisitor.h" />
+    <ClInclude Include="Common\VtableSizeVisitor.h" />
+    <ClInclude Include="Common\VtableVisitor.h" />
+    <ClInclude Include="Common\Hook.h" />
+    <ClInclude Include="Common\ScopedCriticalSection.h" />
+    <ClInclude Include="Common\Time.h" />
+    <ClInclude Include="Config\Config.h" />
+    <ClInclude Include="D3dDdi\Adapter.h" />
+    <ClInclude Include="D3dDdi\AdapterCallbacks.h" />
+    <ClInclude Include="D3dDdi\AdapterFuncs.h" />
+    <ClInclude Include="D3dDdi\Device.h" />
+    <ClInclude Include="D3dDdi\DeviceCallbacks.h" />
+    <ClInclude Include="D3dDdi\DeviceFuncs.h" />
+    <ClInclude Include="D3dDdi\DeviceState.h" />
+    <ClInclude Include="D3dDdi\DrawPrimitive.h" />
+    <ClInclude Include="D3dDdi\DynamicBuffer.h" />
+    <ClInclude Include="D3dDdi\FormatInfo.h" />
+    <ClInclude Include="D3dDdi\Hooks.h" />
+    <ClInclude Include="D3dDdi\KernelModeThunks.h" />
+    <ClInclude Include="D3dDdi\Log\AdapterFuncsLog.h" />
+    <ClInclude Include="D3dDdi\Log\CommonLog.h" />
+    <ClInclude Include="D3dDdi\Log\DeviceCallbacksLog.h" />
+    <ClInclude Include="D3dDdi\Log\DeviceFuncsLog.h" />
+    <ClInclude Include="D3dDdi\Log\KernelModeThunksLog.h" />
+    <ClInclude Include="D3dDdi\Resource.h" />
+    <ClInclude Include="D3dDdi\ScopedCriticalSection.h" />
+    <ClInclude Include="D3dDdi\Visitors\AdapterCallbacksVisitor.h" />
+    <ClInclude Include="D3dDdi\Visitors\AdapterFuncsVisitor.h" />
+    <ClInclude Include="D3dDdi\Visitors\DeviceCallbacksVisitor.h" />
+    <ClInclude Include="D3dDdi\Visitors\DeviceFuncsVisitor.h" />
+    <ClInclude Include="DDraw\Blitter.h" />
+    <ClInclude Include="DDraw\DirectDraw.h" />
+    <ClInclude Include="DDraw\DirectDrawClipper.h" />
+    <ClInclude Include="DDraw\DirectDrawGammaControl.h" />
+    <ClInclude Include="DDraw\DirectDrawPalette.h" />
+    <ClInclude Include="DDraw\DirectDrawSurface.h" />
+    <ClInclude Include="DDraw\Hooks.h" />
+    <ClInclude Include="DDraw\Log.h" />
+    <ClInclude Include="DDraw\ScopedThreadLock.h" />
+    <ClInclude Include="DDraw\Surfaces\PrimarySurface.h" />
+    <ClInclude Include="DDraw\Surfaces\PrimarySurfaceImpl.h" />
+    <ClInclude Include="DDraw\Surfaces\Surface.h" />
+    <ClInclude Include="DDraw\Surfaces\SurfaceImpl.h" />
+    <ClInclude Include="DDraw\Types.h" />
+    <ClInclude Include="DDraw\IReleaseNotifier.h" />
+    <ClInclude Include="DDraw\RealPrimarySurface.h" />
+    <ClInclude Include="DDraw\Visitors\DirectDrawClipperVtblVisitor.h" />
+    <ClInclude Include="DDraw\Visitors\DirectDrawGammaControlVtblVisitor.h" />
+    <ClInclude Include="DDraw\Visitors\DirectDrawPaletteVtblVisitor.h" />
+    <ClInclude Include="DDraw\Visitors\DirectDrawSurfaceVtblVisitor.h" />
+    <ClInclude Include="DDraw\Visitors\DirectDrawVtblVisitor.h" />
+    <ClInclude Include="Direct3d\Direct3d.h" />
+    <ClInclude Include="Direct3d\Direct3dDevice.h" />
+    <ClInclude Include="Direct3d\Direct3dExecuteBuffer.h" />
+    <ClInclude Include="Direct3d\Direct3dLight.h" />
+    <ClInclude Include="Direct3d\Direct3dMaterial.h" />
+    <ClInclude Include="Direct3d\Direct3dTexture.h" />
+    <ClInclude Include="Direct3d\Direct3dVertexBuffer.h" />
+    <ClInclude Include="Direct3d\Direct3dViewport.h" />
+    <ClInclude Include="Direct3d\Hooks.h" />
+    <ClInclude Include="Direct3d\Log.h" />
+    <ClInclude Include="Direct3d\Visitors\Direct3dDeviceVtblVisitor.h" />
+    <ClInclude Include="Direct3d\Visitors\Direct3dExecuteBufferVtblVisitor.h" />
+    <ClInclude Include="Direct3d\Visitors\Direct3dLightVtblVisitor.h" />
+    <ClInclude Include="Direct3d\Visitors\Direct3dMaterialVtblVisitor.h" />
+    <ClInclude Include="Direct3d\Visitors\Direct3dTextureVtblVisitor.h" />
+    <ClInclude Include="Direct3d\Visitors\Direct3dVertexBufferVtblVisitor.h" />
+    <ClInclude Include="Direct3d\Visitors\Direct3dViewportVtblVisitor.h" />
+    <ClInclude Include="Direct3d\Visitors\Direct3dVtblVisitor.h" />
+    <ClInclude Include="Dll\Dll.h" />
+    <ClInclude Include="Gdi\CompatDc.h" />
+    <ClInclude Include="Gdi\Font.h" />
+    <ClInclude Include="Gdi\Gdi.h" />
+    <ClInclude Include="Gdi\Caret.h" />
+    <ClInclude Include="Gdi\Dc.h" />
+    <ClInclude Include="Gdi\DcFunctions.h" />
+    <ClInclude Include="Gdi\Icon.h" />
+    <ClInclude Include="Gdi\Metrics.h" />
+    <ClInclude Include="Gdi\PresentationWindow.h" />
+    <ClInclude Include="Gdi\User32WndProcs.h" />
+    <ClInclude Include="Gdi\Palette.h" />
+    <ClInclude Include="Gdi\Region.h" />
+    <ClInclude Include="Gdi\ScrollBar.h" />
+    <ClInclude Include="Gdi\ScrollFunctions.h" />
+    <ClInclude Include="Gdi\TitleBar.h" />
+    <ClInclude Include="Gdi\VirtualScreen.h" />
+    <ClInclude Include="Gdi\Window.h" />
+    <ClInclude Include="Gdi\WinProc.h" />
+    <ClInclude Include="Win32\DisplayMode.h" />
+    <ClInclude Include="Win32\Log.h" />
+    <ClInclude Include="Win32\MemoryManagement.h" />
+    <ClInclude Include="Win32\MsgHooks.h" />
+    <ClInclude Include="Win32\Registry.h" />
+    <ClInclude Include="Win32\WaitFunctions.h" />
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="Common\Log.cpp" />
+    <ClCompile Include="Common\Hook.cpp" />
+    <ClCompile Include="Common\Path.cpp" />
+    <ClCompile Include="Common\Time.cpp" />
+    <ClCompile Include="D3dDdi\Adapter.cpp" />
+    <ClCompile Include="D3dDdi\AdapterCallbacks.cpp" />
+    <ClCompile Include="D3dDdi\AdapterFuncs.cpp" />
+    <ClCompile Include="D3dDdi\Device.cpp" />
+    <ClCompile Include="D3dDdi\DeviceCallbacks.cpp" />
+    <ClCompile Include="D3dDdi\DeviceFuncs.cpp" />
+    <ClCompile Include="D3dDdi\DeviceState.cpp" />
+    <ClCompile Include="D3dDdi\DrawPrimitive.cpp" />
+    <ClCompile Include="D3dDdi\DynamicBuffer.cpp" />
+    <ClCompile Include="D3dDdi\FormatInfo.cpp" />
+    <ClCompile Include="D3dDdi\Hooks.cpp" />
+    <ClCompile Include="D3dDdi\KernelModeThunks.cpp" />
+    <ClCompile Include="D3dDdi\Log\AdapterFuncsLog.cpp" />
+    <ClCompile Include="D3dDdi\Log\CommonLog.cpp" />
+    <ClCompile Include="D3dDdi\Log\DeviceCallbacksLog.cpp" />
+    <ClCompile Include="D3dDdi\Log\DeviceFuncsLog.cpp" />
+    <ClCompile Include="D3dDdi\Log\KernelModeThunksLog.cpp" />
+    <ClCompile Include="D3dDdi\Resource.cpp" />
+    <ClCompile Include="D3dDdi\ScopedCriticalSection.cpp" />
+    <ClCompile Include="DDraw\Blitter.cpp" />
+    <ClCompile Include="DDraw\DirectDraw.cpp" />
+    <ClCompile Include="DDraw\DirectDrawClipper.cpp" />
+    <ClCompile Include="DDraw\DirectDrawGammaControl.cpp" />
+    <ClCompile Include="DDraw\DirectDrawPalette.cpp" />
+    <ClCompile Include="DDraw\DirectDrawSurface.cpp" />
+    <ClCompile Include="DDraw\Hooks.cpp" />
+    <ClCompile Include="DDraw\IReleaseNotifier.cpp" />
+    <ClCompile Include="DDraw\Log.cpp" />
+    <ClCompile Include="DDraw\RealPrimarySurface.cpp" />
+    <ClCompile Include="DDraw\Surfaces\PrimarySurface.cpp" />
+    <ClCompile Include="DDraw\Surfaces\PrimarySurfaceImpl.cpp" />
+    <ClCompile Include="DDraw\Surfaces\Surface.cpp" />
+    <ClCompile Include="DDraw\Surfaces\SurfaceImpl.cpp" />
+    <ClCompile Include="Direct3d\Direct3d.cpp" />
+    <ClCompile Include="Direct3d\Direct3dDevice.cpp" />
+    <ClCompile Include="Direct3d\Direct3dExecuteBuffer.cpp" />
+    <ClCompile Include="Direct3d\Direct3dLight.cpp" />
+    <ClCompile Include="Direct3d\Direct3dMaterial.cpp" />
+    <ClCompile Include="Direct3d\Direct3dTexture.cpp" />
+    <ClCompile Include="Direct3d\Direct3dVertexBuffer.cpp" />
+    <ClCompile Include="Direct3d\Direct3dViewport.cpp" />
+    <ClCompile Include="Direct3d\Hooks.cpp" />
+    <ClCompile Include="Direct3d\Log.cpp" />
+    <ClCompile Include="Dll\DllMain.cpp" />
+    <ClCompile Include="Dll\Dll.cpp" />
+    <ClCompile Include="Gdi\CompatDc.cpp" />
+    <ClCompile Include="Gdi\Font.cpp" />
+    <ClCompile Include="Gdi\Gdi.cpp" />
+    <ClCompile Include="Gdi\Caret.cpp" />
+    <ClCompile Include="Gdi\Dc.cpp" />
+    <ClCompile Include="Gdi\DcFunctions.cpp" />
+    <ClCompile Include="Gdi\Icon.cpp" />
+    <ClCompile Include="Gdi\Metrics.cpp" />
+    <ClCompile Include="Gdi\PresentationWindow.cpp" />
+    <ClCompile Include="Gdi\User32WndProcs.cpp" />
+    <ClCompile Include="Gdi\Palette.cpp" />
+    <ClCompile Include="Gdi\Region.cpp" />
+    <ClCompile Include="Gdi\ScrollBar.cpp" />
+    <ClCompile Include="Gdi\ScrollFunctions.cpp" />
+    <ClCompile Include="Gdi\TitleBar.cpp" />
+    <ClCompile Include="Gdi\VirtualScreen.cpp" />
+    <ClCompile Include="Gdi\Window.cpp" />
+    <ClCompile Include="Gdi\WinProc.cpp" />
+    <ClCompile Include="Win32\DisplayMode.cpp" />
+    <ClCompile Include="Win32\Log.cpp" />
+    <ClCompile Include="Win32\MemoryManagement.cpp" />
+    <ClCompile Include="Win32\MsgHooks.cpp" />
+    <ClCompile Include="Win32\Registry.cpp" />
+    <ClCompile Include="Win32\WaitFunctions.cpp" />
+  </ItemGroup>
+  <ItemGroup>
+    <ResourceCompile Include="DDrawCompat.rc" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="genversion.ps1" />
+  </ItemGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
+  <ImportGroup Label="ExtensionTargets">
+  </ImportGroup>
+</Project>
