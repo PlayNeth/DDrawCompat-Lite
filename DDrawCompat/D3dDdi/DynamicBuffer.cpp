@@ -1,3 +1,4 @@
+#include <Common/Log.h>
 #include <D3dDdi/Device.h>
 #include <D3dDdi/DynamicBuffer.h>
 
@@ -92,21 +93,34 @@ namespace D3dDdi
 		surfaceInfo.Width = size;
 		surfaceInfo.Height = 1;
 
-		D3DDDIARG_CREATERESOURCE2 cr = {};
-		cr.Format = m_format;
-		cr.Pool = D3DDDIPOOL_VIDEOMEMORY;
-		cr.pSurfList = &surfaceInfo;
-		cr.SurfCount = 1;
-		cr.Flags = m_resourceFlag;
-		cr.Flags.Dynamic = 1;
-		cr.Flags.WriteOnly = 1;
-		cr.Rotation = D3DDDI_ROTATION_IDENTITY;
-
 		m_resource.reset();
-		if (SUCCEEDED(m_device.createPrivateResource(cr)))
+
+		// Some drivers (e.g. Intel) reject dynamic buffers in the default video memory pool, so the
+		// AGP/system-visible (non-local) and local pools are tried too before giving up.
+		const D3DDDI_POOL pools[] = { D3DDDIPOOL_VIDEOMEMORY, D3DDDIPOOL_NONLOCALVIDMEM, D3DDDIPOOL_LOCALVIDMEM };
+		for (auto pool : pools)
 		{
-			m_resource.reset(cr.hResource);
-			m_size = size;
+			D3DDDIARG_CREATERESOURCE2 cr = {};
+			cr.Format = m_format;
+			cr.Pool = pool;
+			cr.pSurfList = &surfaceInfo;
+			cr.SurfCount = 1;
+			cr.Flags = m_resourceFlag;
+			cr.Flags.Dynamic = 1;
+			cr.Flags.WriteOnly = 1;
+			cr.Rotation = D3DDDI_ROTATION_IDENTITY;
+
+			const HRESULT result = m_device.createPrivateResource(cr);
+			if (SUCCEEDED(result))
+			{
+				m_resource.reset(cr.hResource);
+				m_size = size;
+				LOG_VERBOSE << (m_resourceFlag.IndexBuffer ? "Dynamic index buffer" : "Dynamic vertex buffer")
+					<< " created in pool " << static_cast<int>(pool) << ", " << size << " bytes";
+				return;
+			}
+			LOG_VERBOSE << (m_resourceFlag.IndexBuffer ? "Dynamic index buffer" : "Dynamic vertex buffer")
+				<< " creation failed in pool " << static_cast<int>(pool) << ": " << Compat::hex(result);
 		}
 	}
 

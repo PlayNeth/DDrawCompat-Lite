@@ -13,6 +13,7 @@
 #include <DDraw/RealPrimarySurface.h>
 #include <DDraw/ScopedThreadLock.h>
 #include <DDraw/Surfaces/PrimarySurface.h>
+#include <D3dDdi/Stats.h>
 #include <Gdi/Palette.h>
 #include <Win32/DisplayMode.h>
 
@@ -103,6 +104,7 @@ namespace
 			}
 		}
 
+		++D3dDdi::Stats::g_surfaceDcs;
 		auto result = D3DKMTCreateDCFromMemory(pData);
 		pData->Format = origFormat;
 		pData->pColorTable = origColorTable;

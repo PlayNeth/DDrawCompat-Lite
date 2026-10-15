@@ -197,6 +197,7 @@
     <ClInclude Include="D3dDdi\Log\DeviceFuncsLog.h" />
     <ClInclude Include="D3dDdi\Log\KernelModeThunksLog.h" />
     <ClInclude Include="D3dDdi\Resource.h" />
+    <ClInclude Include="D3dDdi\Stats.h" />
     <ClInclude Include="D3dDdi\ScopedCriticalSection.h" />
     <ClInclude Include="D3dDdi\Visitors\AdapterCallbacksVisitor.h" />
     <ClInclude Include="D3dDdi\Visitors\AdapterFuncsVisitor.h" />
