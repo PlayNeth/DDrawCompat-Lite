@@ -10,6 +10,7 @@ namespace DDraw
 	{
 		DDSURFACEDESC2 getDisplayMode(CompatRef<IDirectDraw7> dd);
 		DDPIXELFORMAT getRgbPixelFormat(DWORD bpp);
+		void logSurfaceSummary();
 		void suppressEmulatedDirectDraw(GUID*& guid);
 
 		template <typename TDirectDraw>

@@ -29,7 +29,7 @@ namespace
 
 	long long g_qpcSessionStart = 0;
 	unsigned long long g_sessionFrames = 0;
-	double g_worstFrameMs = 0;
+	std::vector<float> g_sessionFrameTimesMs;
 
 	HFONT g_font = nullptr;
 	LONG g_fontHeight = 0;
@@ -43,7 +43,13 @@ namespace
 		else if (g_frameCount > 0)
 		{
 			const auto prev = g_frames[(g_frameIndex + g_frames.size() - 1) % g_frames.size()];
-			g_worstFrameMs = std::max<double>(g_worstFrameMs, (qpcNow - prev) * 1000.0 / Time::g_qpcFrequency);
+			// Kept for the whole-session lows in the verbose log; gaps of a second or more are
+			// loading screens or pauses rather than gameplay, so they are left out.
+			const float frameTimeMs = static_cast<float>((qpcNow - prev) * 1000.0 / Time::g_qpcFrequency);
+			if (frameTimeMs < 1000 && g_sessionFrameTimesMs.size() < 1000000 && Compat::Log::isVerbose())
+			{
+				g_sessionFrameTimesMs.push_back(frameTimeMs);
+			}
 		}
 
 		g_frames[g_frameIndex] = qpcNow;
@@ -190,9 +196,14 @@ namespace DDraw
 				return;
 			}
 
-			char text[160] = {};
-			sprintf_s(text, "Frame rate summary: %llu frames in %.1f s, average %.1f FPS, slowest frame %.1f ms",
-				g_sessionFrames, seconds, (g_sessionFrames - 1) / seconds, g_worstFrameMs);
+			std::vector<double> frameTimesMs(g_sessionFrameTimesMs.begin(), g_sessionFrameTimesMs.end());
+			const double low1 = frameTimesMs.empty() ? 0 : getLowFps(frameTimesMs, 0.01);
+			const double low01 = frameTimesMs.empty() ? 0 : getLowFps(frameTimesMs, 0.001);
+
+			char text[200] = {};
+			sprintf_s(text, "Frame rate summary: %llu frames in %.1f s, average %.1f FPS, 1%% low %.1f, 0.1%% low %.1f"
+				" (lows exclude pauses of 1 s or more)",
+				g_sessionFrames, seconds, (g_sessionFrames - 1) / seconds, low1, low01);
 			Compat::Log() << text;
 		}
 
