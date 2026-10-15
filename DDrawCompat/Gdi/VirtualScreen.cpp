@@ -34,6 +34,7 @@ namespace
 	HGDIOBJ g_stockBitmap = nullptr;
 	RGBQUAD g_defaultPalette[256] = {};
 	RGBQUAD g_systemPalette[256] = {};
+	bool g_isDefaultPaletteFull = false;
 	std::map<HDC, VirtualScreenDc> g_dcs;
 
 	BOOL CALLBACK addMonitorRectToRegion(
@@ -71,7 +72,7 @@ namespace
 
 		if (8 == g_bpp)
 		{
-			if (useDefaultPalette)
+			if (useDefaultPalette && !g_isDefaultPaletteFull)
 			{
 				memcpy(bmi.bmiColors, g_defaultPalette, sizeof(g_defaultPalette));
 			}
@@ -296,7 +297,7 @@ namespace Gdi
 				memcpy(g_systemPalette, systemPalette, sizeof(systemPalette));
 				for (auto& dc : g_dcs)
 				{
-					if (!dc.second.useDefaultPalette)
+					if (!dc.second.useDefaultPalette || g_isDefaultPaletteFull)
 					{
 						SetDIBColorTable(dc.first, 0, 256, systemPalette);
 					}
@@ -304,6 +305,24 @@ namespace Gdi
 			}
 
 			DDraw::RealPrimarySurface::scheduleUpdate();
+		}
+
+		void setDefaultPaletteFull(bool isFull)
+		{
+			Compat::ScopedCriticalSection lock(g_cs);
+			if (isFull == g_isDefaultPaletteFull)
+			{
+				return;
+			}
+
+			g_isDefaultPaletteFull = isFull;
+			for (auto& dc : g_dcs)
+			{
+				if (dc.second.useDefaultPalette)
+				{
+					SetDIBColorTable(dc.first, 0, 256, isFull ? g_systemPalette : g_defaultPalette);
+				}
+			}
 		}
 	}
 }
