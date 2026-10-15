@@ -1,6 +1,7 @@
 #pragma once
 
 #include <map>
+#include <vector>
 
 #include <d3d.h>
 #include <d3dnthal.h>
@@ -31,7 +32,9 @@ namespace D3dDdi
 		static Adapter& get(HANDLE adapter) { return s_adapters.find(adapter)->second; }
 
 	private:
+		std::vector<FORMATOP> getFormatOps();
 		DWORD getSupportedZBufferBitDepths();
+		bool isP8FormatMissing();
 
 		HANDLE m_adapter;
 		D3DDDI_ADAPTERFUNCS m_origVtable;
@@ -40,6 +43,7 @@ namespace D3dDdi
 
 		D3DNTHAL_D3DEXTENDEDCAPS m_d3dExtendedCaps;
 		DDRAW_CAPS m_ddrawCaps;
+		int m_isP8FormatMissing;
 
 		static std::map<HANDLE, Adapter> s_adapters;
 	};

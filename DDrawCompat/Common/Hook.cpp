@@ -75,6 +75,38 @@ namespace
 		return ntHeaders;
 	}
 
+	// Fixes up relative branch targets in instructions copied from src to dst (the trampoline).
+	// rel32 call/jmp/jcc are adjusted; short (rel8) branches cannot reach back and are rejected.
+	bool relocateInstructions(BYTE* dst, const BYTE* src, unsigned size)
+	{
+		const int delta = static_cast<int>(src - dst);
+		unsigned offset = 0;
+		while (offset < size)
+		{
+			const unsigned length = Compat::getInstructionLength(src + offset);
+			if (0 == length)
+			{
+				return false;
+			}
+
+			const BYTE op = src[offset];
+			if ((0xE8 == op || 0xE9 == op) && 5 == length)
+			{
+				reinterpret_cast<int&>(dst[offset + 1]) += delta;
+			}
+			else if (0x0F == op && src[offset + 1] >= 0x80 && src[offset + 1] <= 0x8F && 6 == length)
+			{
+				reinterpret_cast<int&>(dst[offset + 2]) += delta;
+			}
+			else if (0xEB == op || (op >= 0x70 && op <= 0x7F) || (op >= 0xE0 && op <= 0xE3))
+			{
+				return false;
+			}
+			offset += length;
+		}
+		return true;
+	}
+
 	void hookFunction(void*& origFuncPtr, void* newFuncPtr, const char* funcName)
 	{
 		BYTE* targetFunc = reinterpret_cast<BYTE*>(origFuncPtr);
@@ -144,6 +176,12 @@ namespace
 		BYTE* trampoline = static_cast<BYTE*>(
 			VirtualAlloc(nullptr, totalInstructionSize + 5, MEM_COMMIT | MEM_RESERVE, PAGE_EXECUTE_READWRITE));
 		memcpy(trampoline, targetFunc, totalInstructionSize);
+		if (!relocateInstructions(trampoline, targetFunc, totalInstructionSize))
+		{
+			Compat::Log() << "ERROR: Cannot relocate the start of function: " << funcName;
+			VirtualFree(trampoline, 0, MEM_RELEASE);
+			return;
+		}
 		trampoline[totalInstructionSize] = 0xE9;
 		reinterpret_cast<int&>(trampoline[totalInstructionSize + 1]) = targetFunc - (trampoline + 5);
 		DWORD oldProtect = 0;

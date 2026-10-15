@@ -3,6 +3,7 @@
 #include <D3dDdi/DeviceState.h>
 #include <D3dDdi/DrawPrimitive.h>
 #include <D3dDdi/Log/DeviceFuncsLog.h>
+#include <D3dDdi/Resource.h>
 
 namespace
 {
@@ -142,6 +143,20 @@ namespace D3dDdi
 
 		case D3DDDITSS_TEXTURECOLORKEYVAL:
 			m_textureStageState[data->Stage][D3DDDITSS_DISABLETEXTURECOLORKEY] = UNINITIALIZED_STATE;
+			if (data->Stage < m_textures.size())
+			{
+				// The color key of an emulated palettized texture is a palette index, but the driver
+				// compares it against the converted 32-bit colors.
+				auto resource = m_device.getResource(m_textures[data->Stage]);
+				if (resource && resource->isPalettizedTexture())
+				{
+					m_device.flushPrimitives();
+					D3DDDIARG_TEXTURESTAGESTATE tss = *data;
+					tss.Value = resource->getPalettizedColorKey(data->Value);
+					m_textureStageState[data->Stage][D3DDDITSS_TEXTURECOLORKEYVAL] = UNINITIALIZED_STATE;
+					return setStateArray(&tss, m_textureStageState[data->Stage], m_device.getOrigVtable().pfnSetTextureStageState);
+				}
+			}
 			break;
 		}
 		return setStateArray(data, m_textureStageState[data->Stage], m_device.getOrigVtable().pfnSetTextureStageState);

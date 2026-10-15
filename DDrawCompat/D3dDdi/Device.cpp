@@ -445,6 +445,71 @@ namespace D3dDdi
 		return m_origVtable.pfnUnlock(m_device, data);
 	}
 
+	const DWORD* Device::getPalette(UINT paletteHandle) const
+	{
+		return paletteHandle < m_palettes.size() ? m_palettes[paletteHandle].data() : nullptr;
+	}
+
+	HRESULT Device::pfnSetPalette(const D3DDDIARG_SETPALETTE* data)
+	{
+		flushPrimitives();
+		auto resource = getResource(data->hResource);
+		if (resource && resource->isPalettizedTexture())
+		{
+			resource->setPaletteHandle(data->PaletteHandle);
+			return S_OK;
+		}
+		return m_origVtable.pfnSetPalette(m_device, data);
+	}
+
+	HRESULT Device::pfnTexBlt(const D3DDDIARG_TEXBLT* data)
+	{
+		flushPrimitives();
+		auto resource = getResource(data->hDstResource);
+		if (resource && resource->isPalettizedTexture())
+		{
+			return resource->palettizedTexBlt(data->DstPoint, data->hSrcResource, data->SrcRect);
+		}
+		return m_origVtable.pfnTexBlt(m_device, data);
+	}
+
+	HRESULT Device::pfnTexBlt1(const D3DDDIARG_TEXBLT1* data)
+	{
+		flushPrimitives();
+		auto resource = getResource(data->hDstResource);
+		if (resource && resource->isPalettizedTexture())
+		{
+			return resource->palettizedTexBlt(data->DstPoint, data->hSrcResource, data->SrcRect);
+		}
+		return m_origVtable.pfnTexBlt1(m_device, data);
+	}
+
+	HRESULT Device::pfnUpdatePalette(const D3DDDIARG_UPDATEPALETTE* data, const PALETTEENTRY* paletteData)
+	{
+		flushPrimitives();
+		if (data->PaletteHandle >= m_palettes.size())
+		{
+			m_palettes.resize(data->PaletteHandle + 1);
+		}
+
+		auto& palette = m_palettes[data->PaletteHandle];
+		for (UINT i = 0; i < data->NumEntries && data->StartIndex + i < palette.size(); ++i)
+		{
+			palette[data->StartIndex + i] =
+				(paletteData[i].peRed << 16) | (paletteData[i].peGreen << 8) | paletteData[i].peBlue;
+		}
+
+		for (auto& resource : m_resources)
+		{
+			if (resource.second.isPalettizedTexture() && resource.second.getPaletteHandle() == data->PaletteHandle)
+			{
+				resource.second.onPaletteUpdated();
+			}
+		}
+
+		return m_origVtable.pfnUpdatePalette(m_device, data, paletteData);
+	}
+
 	std::map<HANDLE, Device> Device::s_devices;
 	bool Device::s_isFlushEnabled = true;
 }

@@ -10,8 +10,10 @@
 #include <Common/Path.h>
 #include <Common/Time.h>
 #include <Config/Config.h>
+#include <version.h>
 #include <D3dDdi/Hooks.h>
 #include <DDraw/DirectDraw.h>
+#include <DDraw/FpsCounter.h>
 #include <DDraw/Hooks.h>
 #include <Direct3d/Hooks.h>
 #include <Dll/Dll.h>
@@ -109,6 +111,26 @@ namespace
 			(!Compat::isEqual(currentDllPath, dciman32DllPath) && GetModuleHandleW(dciman32DllPath.c_str()));
 	}
 
+	void applyCpuAffinity()
+	{
+		if (0 == Config::cpuAffinity)
+		{
+			return;
+		}
+
+		DWORD_PTR processMask = 0;
+		DWORD_PTR systemMask = 0;
+		GetProcessAffinityMask(GetCurrentProcess(), &processMask, &systemMask);
+		DWORD_PTR mask = Config::cpuAffinity & systemMask;
+		if (0 == mask)
+		{
+			Compat::Log() << "CpuAffinity: none of the configured cores exist, using core 1";
+			mask = 1;
+		}
+		SetProcessAffinityMask(GetCurrentProcess(), mask);
+		LOG_VERBOSE << "CPU affinity mask: " << Compat::hex(mask) << " (system: " << Compat::hex(systemMask) << ')';
+	}
+
 	void printEnvironmentVariable(const char* var)
 	{
 		const DWORD size = GetEnvironmentVariable(var, nullptr, 0);
@@ -174,13 +196,18 @@ BOOL WINAPI DllMain(HINSTANCE hinstDLL, DWORD fdwReason, LPVOID lpvReserved)
 		}
 
 		auto processPath(Compat::getModulePath(nullptr));
-		Compat::Log::initLogging(processPath);
+		auto currentDllPath(Compat::getModulePath(hinstDLL));
+		Config::load(currentDllPath, processPath);
+		if (Config::Logging::OFF != Config::logging)
+		{
+			Compat::Log::initLogging(processPath, Config::Logging::VERBOSE == Config::logging);
+		}
 
+		Compat::Log() << "DDrawCompat-Lite " << VERSION_STRING;
 		Compat::Log() << "Process path: " << processPath.u8string();
 		printEnvironmentVariable("__COMPAT_LAYER");
-		auto currentDllPath(Compat::getModulePath(hinstDLL));
 		Compat::Log() << "Loading DDrawCompat " << (lpvReserved ? "statically" : "dynamically") << " from " << currentDllPath.u8string();
-		Config::load(currentDllPath, processPath);
+		Config::logSettings();
 
 		auto systemPath(Compat::getSystemPath());
 		if (Compat::isEqual(currentDllPath.parent_path(), systemPath))
@@ -215,7 +242,7 @@ BOOL WINAPI DllMain(HINSTANCE hinstDLL, DWORD fdwReason, LPVOID lpvReserved)
 
 		const BOOL disablePriorityBoost = TRUE;
 		SetProcessPriorityBoost(GetCurrentProcess(), disablePriorityBoost);
-		SetProcessAffinityMask(GetCurrentProcess(), 1);
+		applyCpuAffinity();
 		timeBeginPeriod(1);
 		setDpiAwareness();
 		SetThemeAppProperties(0);
@@ -232,6 +259,10 @@ BOOL WINAPI DllMain(HINSTANCE hinstDLL, DWORD fdwReason, LPVOID lpvReserved)
 	}
 	else if (fdwReason == DLL_PROCESS_DETACH)
 	{
+		if (Compat::Log::isVerbose())
+		{
+			DDraw::FpsCounter::logSummary();
+		}
 		Compat::Log() << "DDrawCompat detached successfully";
 	}
 	else if (fdwReason == DLL_THREAD_DETACH)
