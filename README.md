@@ -1,4 +1,4 @@
-# DDrawCompat-lite
+# DDrawCompat-Lite
 
 A fork of DDrawCompat v0.3.2 kept intentionally small. It adds a handful of settings read from an optional `DDrawCompat.ini` (see the sample in the repository root), using the same key names and value syntax as later DDrawCompat versions where they exist:
 
