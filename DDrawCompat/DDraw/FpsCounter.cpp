@@ -43,7 +43,7 @@ namespace
 		else if (g_frameCount > 0)
 		{
 			const auto prev = g_frames[(g_frameIndex + g_frames.size() - 1) % g_frames.size()];
-			g_worstFrameMs = std::max(g_worstFrameMs, (qpcNow - prev) * 1000.0 / Time::g_qpcFrequency);
+			g_worstFrameMs = std::max<double>(g_worstFrameMs, (qpcNow - prev) * 1000.0 / Time::g_qpcFrequency);
 		}
 
 		g_frames[g_frameIndex] = qpcNow;
