@@ -271,6 +271,7 @@
     <ClCompile Include="Common\Hook.cpp" />
     <ClCompile Include="Common\Path.cpp" />
     <ClCompile Include="Common\Time.cpp" />
+    <ClCompile Include="Config\Config.cpp" />
     <ClCompile Include="D3dDdi\Adapter.cpp" />
     <ClCompile Include="D3dDdi\AdapterCallbacks.cpp" />
     <ClCompile Include="D3dDdi\AdapterFuncs.cpp" />

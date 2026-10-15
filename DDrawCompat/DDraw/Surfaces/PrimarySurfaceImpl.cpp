@@ -1,4 +1,5 @@
 #include <Common/CompatPtr.h>
+#include <Config/Config.h>
 #include <D3dDdi/KernelModeThunks.h>
 #include <D3dDdi/ScopedCriticalSection.h>
 #include <DDraw/DirectDrawClipper.h>
@@ -125,6 +126,11 @@ namespace DDraw
 			return DDERR_WASSTILLDRAWING;
 		}
 
+		if (Config::FpsLimiter::FLIPSTART == Config::fpsLimiter)
+		{
+			RealPrimarySurface::waitForFpsLimit();
+		}
+
 		auto surfaceTargetOverride(CompatPtr<TSurface>::from(lpDDSurfaceTargetOverride));
 		const bool isFlipEmulated = 0 != (PrimarySurface::getOrigCaps() & DDSCAPS_SYSTEMMEMORY);
 		if (isFlipEmulated)
@@ -135,7 +141,12 @@ namespace DDraw
 				caps.dwCaps = DDSCAPS_BACKBUFFER;
 				getOrigVtable(This).GetAttachedSurface(This, &caps, &surfaceTargetOverride.getRef());
 			}
-			return Blt(This, nullptr, surfaceTargetOverride.get(), nullptr, DDBLT_WAIT, nullptr);
+			HRESULT result = Blt(This, nullptr, surfaceTargetOverride.get(), nullptr, DDBLT_WAIT, nullptr);
+			if (SUCCEEDED(result) && Config::FpsLimiter::FLIPEND == Config::fpsLimiter)
+			{
+				RealPrimarySurface::waitForFpsLimit();
+			}
+			return result;
 		}
 
 		HRESULT result = SurfaceImpl::Flip(This, surfaceTargetOverride, DDFLIP_WAIT);
@@ -145,7 +156,12 @@ namespace DDraw
 		}
 
 		PrimarySurface::updateFrontResource();
-		return RealPrimarySurface::flip(surfaceTargetOverride, dwFlags);
+		result = RealPrimarySurface::flip(surfaceTargetOverride, dwFlags);
+		if (SUCCEEDED(result) && Config::FpsLimiter::FLIPEND == Config::fpsLimiter)
+		{
+			RealPrimarySurface::waitForFpsLimit();
+		}
+		return result;
 	}
 
 	template <typename TSurface>

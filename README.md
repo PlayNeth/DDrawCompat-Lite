@@ -1,3 +1,20 @@
+# DDrawCompat-lite
+
+A fork of DDrawCompat v0.3.2 kept intentionally small. It adds a handful of settings read from an optional `DDrawCompat.ini` (see the sample in the repository root), using the same key names and value syntax as later DDrawCompat versions where they exist:
+
+| Setting | Values | Notes |
+|---|---|---|
+| AlternatePixelCenter | `off`, `on`, `custom(N)` | Shifts pre-transformed vertices by -0.5 or N/100 pixel; points and lines are left alone |
+| VSync | `app`, `off`, `on(N)` | Overrides the game's flip interval |
+| FpsLimiter | `off`, `flipstart(N)`, `flipend(N)` | Caps the flip rate to N FPS |
+| CpuSpeed | `app`, MHz | Fakes the registry `~MHz` value only |
+| VideoMemory | `app`, MB | Fakes DirectDraw `GetCaps`/`GetAvailableVidMem` |
+| SystemMemory | `app`, MB | Fakes `GlobalMemoryStatus(Ex)` physical memory |
+
+With no ini file, behavior is identical to v0.3.2. The parsed settings are written to the log.
+
+---
+
 # DDrawCompat
 
 ### Introduction

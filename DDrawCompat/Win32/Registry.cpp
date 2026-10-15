@@ -6,6 +6,7 @@
 
 #include <Common/Hook.h>
 #include <Common/Log.h>
+#include <Config/Config.h>
 #include <Win32/Registry.h>
 
 typedef long NTSTATUS;
@@ -134,6 +135,50 @@ namespace
 		return LOG_RESULT(result);
 	}
 
+	bool isCpuSpeedValue(HKEY hKey, const std::wstring& valueName)
+	{
+		if (0 == Config::cpuSpeed || !hKey || 0 != lstrcmpiW(valueName.c_str(), L"~MHz"))
+		{
+			return false;
+		}
+
+		std::wstring keyName = getKeyName(hKey);
+		CharUpperBuffW(keyName.data(), static_cast<DWORD>(keyName.size()));
+		return std::wstring::npos != keyName.find(L"\\HARDWARE\\DESCRIPTION\\SYSTEM\\CENTRALPROCESSOR\\");
+	}
+
+	LONG returnDword(DWORD value, LPDWORD lpType, LPBYTE lpData, LPDWORD lpcbData)
+	{
+		if (lpData && !lpcbData)
+		{
+			return ERROR_INVALID_PARAMETER;
+		}
+
+		if (lpType)
+		{
+			*lpType = REG_DWORD;
+		}
+
+		LONG result = ERROR_SUCCESS;
+		if (lpData)
+		{
+			if (*lpcbData >= sizeof(DWORD))
+			{
+				std::memcpy(lpData, &value, sizeof(DWORD));
+			}
+			else
+			{
+				result = ERROR_MORE_DATA;
+			}
+		}
+
+		if (lpcbData)
+		{
+			*lpcbData = sizeof(DWORD);
+		}
+		return result;
+	}
+
 	LONG WINAPI regQueryValueExA(HKEY hKey, LPCSTR lpValueName, LPDWORD lpReserved, LPDWORD lpType,
 		LPBYTE lpData, LPDWORD lpcbData)
 	{
@@ -141,6 +186,16 @@ namespace
 
 		if (hKey && lpValueName)
 		{
+			if (0 != Config::cpuSpeed)
+			{
+				std::wostringstream valueNameW;
+				valueNameW << lpValueName;
+				if (isCpuSpeedValue(hKey, valueNameW.str()))
+				{
+					return LOG_RESULT(returnDword(Config::cpuSpeed, lpType, lpData, lpcbData));
+				}
+			}
+
 			const std::wstring keyName = getKeyName(hKey);
 			const std::wstring localMachinePrefix = L"\\REGISTRY\\MACHINE\\";
 			if (localMachinePrefix == keyName.substr(0, localMachinePrefix.size()))
@@ -158,16 +213,54 @@ namespace
 
 		return LOG_RESULT(CALL_ORIG_FUNC(RegQueryValueExA)(hKey, lpValueName, lpReserved, lpType, lpData, lpcbData));
 	}
+
+	LONG WINAPI regQueryValueExW(HKEY hKey, LPCWSTR lpValueName, LPDWORD lpReserved, LPDWORD lpType,
+		LPBYTE lpData, LPDWORD lpcbData)
+	{
+		LOG_FUNC("regQueryValueExW", hKey, lpValueName, lpReserved, lpType, static_cast<void*>(lpData), lpcbData);
+
+		if (hKey && lpValueName && isCpuSpeedValue(hKey, lpValueName))
+		{
+			return LOG_RESULT(returnDword(Config::cpuSpeed, lpType, lpData, lpcbData));
+		}
+
+		return LOG_RESULT(CALL_ORIG_FUNC(RegQueryValueExW)(hKey, lpValueName, lpReserved, lpType, lpData, lpcbData));
+	}
 }
 
 namespace Win32
 {
 	namespace Registry
 	{
+		void installRegQueryValueExHooks()
+		{
+			static bool isAlreadyInstalled = false;
+			if (isAlreadyInstalled)
+			{
+				return;
+			}
+			isAlreadyInstalled = true;
+
+			HOOK_SHIM_FUNCTION(RegQueryValueExA, regQueryValueExA);
+			if (0 != Config::cpuSpeed)
+			{
+				HOOK_SHIM_FUNCTION(RegQueryValueExW, regQueryValueExW);
+			}
+		}
+
+		void installEarlyHooks()
+		{
+			// Games usually read the CPU speed at startup, before creating any DirectDraw object.
+			if (0 != Config::cpuSpeed)
+			{
+				installRegQueryValueExHooks();
+			}
+		}
+
 		void installHooks()
 		{
 			HOOK_SHIM_FUNCTION(RegGetValueW, regGetValueW);
-			HOOK_SHIM_FUNCTION(RegQueryValueExA, regQueryValueExA);
+			installRegQueryValueExHooks();
 		}
 
 		void setValue(HKEY key, const char* subKey, const char* valueName, DWORD value)

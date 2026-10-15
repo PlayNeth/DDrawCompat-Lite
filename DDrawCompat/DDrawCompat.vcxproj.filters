@@ -55,6 +55,9 @@
     <Filter Include="Header Files\Win32">
       <UniqueIdentifier>{81a1faf8-aa27-491f-9f99-29874569ed2c}</UniqueIdentifier>
     </Filter>
+    <Filter Include="Source Files\Config">
+      <UniqueIdentifier>{f3312807-036c-42e9-9338-8ff3ca2e159f}</UniqueIdentifier>
+    </Filter>
     <Filter Include="Source Files\Win32">
       <UniqueIdentifier>{ad819a3d-f694-4a6f-8c56-ae43e95d1c2b}</UniqueIdentifier>
     </Filter>
@@ -463,6 +466,9 @@
     </ClCompile>
     <ClCompile Include="Common\Time.cpp">
       <Filter>Source Files\Common</Filter>
+    </ClCompile>
+    <ClCompile Include="Config\Config.cpp">
+      <Filter>Source Files\Config</Filter>
     </ClCompile>
     <ClCompile Include="Common\Log.cpp">
       <Filter>Source Files\Common</Filter>
