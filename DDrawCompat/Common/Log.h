@@ -183,7 +183,10 @@ namespace Compat
 		template <typename T>
 		Log& operator<<(const T& t)
 		{
-			s_logFile << t;
+			if (s_isEnabled)
+			{
+				s_logFile << t;
+			}
 			return *this;
 		}
 

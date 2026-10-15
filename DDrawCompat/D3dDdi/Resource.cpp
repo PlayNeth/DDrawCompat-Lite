@@ -23,6 +23,25 @@ namespace
 
 	const UINT g_resourceTypeFlags = getResourceTypeFlags().Value;
 
+	// Converts a row of 8-bit palette indices to 32-bit colors, 4 pixels per step.
+	void convertP8Row(DWORD* dst, const BYTE* src, UINT width, const DWORD* palette)
+	{
+		UINT x = 0;
+		for (; x + 4 <= width; x += 4)
+		{
+			DWORD indices = 0;
+			memcpy(&indices, src + x, sizeof(indices));
+			dst[x] = palette[indices & 0xFF];
+			dst[x + 1] = palette[(indices >> 8) & 0xFF];
+			dst[x + 2] = palette[(indices >> 16) & 0xFF];
+			dst[x + 3] = palette[indices >> 24];
+		}
+		for (; x < width; ++x)
+		{
+			dst[x] = palette[src[x]];
+		}
+	}
+
 	LONG divCeil(LONG n, LONG d)
 	{
 		return (n + d - 1) / d;
@@ -613,15 +632,11 @@ namespace D3dDdi
 			}
 
 			auto& srcLockData = srcResource.m_lockData[data.SrcSubResourceIndex];
-			for (UINT y = 0; y < srcResource.m_fixedData.surfaceData[data.SrcSubResourceIndex].Height; ++y)
+			const auto& srcSurface = srcResource.m_fixedData.surfaceData[data.SrcSubResourceIndex];
+			for (UINT y = 0; y < srcSurface.Height; ++y)
 			{
-				auto src = static_cast<const BYTE*>(srcLockData.data) + y * srcLockData.pitch;
-				auto dst = reinterpret_cast<DWORD*>(static_cast<BYTE*>(lock.pSurfData) + y * lock.Pitch);
-				for (UINT x = 0; x < srcResource.m_fixedData.surfaceData[data.SrcSubResourceIndex].Width; ++x)
-				{
-					dst[x] = pal[*src];
-					++src;
-				}
+				convertP8Row(reinterpret_cast<DWORD*>(static_cast<BYTE*>(lock.pSurfData) + y * lock.Pitch),
+					static_cast<const BYTE*>(srcLockData.data) + y * srcLockData.pitch, srcSurface.Width, pal);
 			}
 
 			D3DDDIARG_UNLOCK unlock = {};
@@ -1072,12 +1087,8 @@ namespace D3dDdi
 
 		for (UINT y = 0; y < level.height; ++y)
 		{
-			const BYTE* src = level.indices.data() + y * level.pitch;
-			DWORD* dst = reinterpret_cast<DWORD*>(static_cast<BYTE*>(lock.pSurfData) + y * lock.Pitch);
-			for (UINT x = 0; x < level.width; ++x)
-			{
-				dst[x] = palette[src[x]];
-			}
+			convertP8Row(reinterpret_cast<DWORD*>(static_cast<BYTE*>(lock.pSurfData) + y * lock.Pitch),
+				level.indices.data() + y * level.pitch, level.width, palette);
 		}
 
 		D3DDDIARG_UNLOCK unlock = {};

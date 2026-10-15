@@ -75,6 +75,27 @@ namespace
 		return ntHeaders;
 	}
 
+	// All trampolines share one executable block instead of a 64 KB address space reservation each.
+	BYTE* allocTrampoline(unsigned size)
+	{
+		const unsigned BLOCK_SIZE = 64 * 1024;
+		static BYTE* block = nullptr;
+		static unsigned used = BLOCK_SIZE;
+		static SRWLOCK lock = SRWLOCK_INIT;
+
+		size = (size + 15) & ~15;
+		AcquireSRWLockExclusive(&lock);
+		if (used + size > BLOCK_SIZE)
+		{
+			block = static_cast<BYTE*>(VirtualAlloc(nullptr, BLOCK_SIZE, MEM_COMMIT | MEM_RESERVE, PAGE_EXECUTE_READWRITE));
+			used = 0;
+		}
+		BYTE* trampoline = block ? block + used : nullptr;
+		used += size;
+		ReleaseSRWLockExclusive(&lock);
+		return trampoline;
+	}
+
 	// Fixes up relative branch targets in instructions copied from src to dst (the trampoline).
 	// rel32 call/jmp/jcc are adjusted; short (rel8) branches cannot reach back and are rejected.
 	bool relocateInstructions(BYTE* dst, const BYTE* src, unsigned size)
@@ -173,19 +194,22 @@ namespace
 		LOG_DEBUG << "Hooking function: " << funcName
 			<< " (" << oss.str() << Compat::hexDump(targetFunc, totalInstructionSize) << ')';
 
-		BYTE* trampoline = static_cast<BYTE*>(
-			VirtualAlloc(nullptr, totalInstructionSize + 5, MEM_COMMIT | MEM_RESERVE, PAGE_EXECUTE_READWRITE));
+		BYTE* trampoline = allocTrampoline(totalInstructionSize + 5);
+		if (!trampoline)
+		{
+			Compat::Log() << "ERROR: Failed to allocate a trampoline for function: " << funcName;
+			return;
+		}
+
 		memcpy(trampoline, targetFunc, totalInstructionSize);
 		if (!relocateInstructions(trampoline, targetFunc, totalInstructionSize))
 		{
 			Compat::Log() << "ERROR: Cannot relocate the start of function: " << funcName;
-			VirtualFree(trampoline, 0, MEM_RELEASE);
 			return;
 		}
 		trampoline[totalInstructionSize] = 0xE9;
 		reinterpret_cast<int&>(trampoline[totalInstructionSize + 1]) = targetFunc - (trampoline + 5);
 		DWORD oldProtect = 0;
-		VirtualProtect(trampoline, totalInstructionSize + 5, PAGE_EXECUTE_READ, &oldProtect);
 
 		VirtualProtect(targetFunc, totalInstructionSize, PAGE_EXECUTE_READWRITE, &oldProtect);
 		targetFunc[0] = 0xE9;

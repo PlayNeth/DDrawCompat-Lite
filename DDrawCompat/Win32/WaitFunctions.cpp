@@ -10,6 +10,15 @@ namespace
 {
 	void mitigateBusyWaiting()
 	{
+		// Querying the thread cycle time is a kernel call, while the hooked functions (timers, message
+		// polling) can be called thousands of times per frame. Checking every 64th call is enough to
+		// detect busy-waiting loops.
+		thread_local unsigned callCount = 0;
+		if (0 != (++callCount & 63))
+		{
+			return;
+		}
+
 		thread_local ULONG64 ctLastThreadSwitch = Time::queryThreadCycleTime();
 		ULONG64 ctNow = Time::queryThreadCycleTime();
 		if (ctNow - ctLastThreadSwitch >= Config::threadSwitchCycleTime)
