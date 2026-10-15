@@ -17,7 +17,7 @@ namespace Config
 	FpsLimiter fpsLimiter = FpsLimiter::OFF;
 	unsigned fpsLimit = 60;
 	bool fpsCounter = false;
-	bool palettizedTextures = true;
+	bool palettizedTextures = false;
 	bool dialogColors = true;
 	unsigned cpuAffinity = 1;
 
