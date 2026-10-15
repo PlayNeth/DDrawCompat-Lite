@@ -82,12 +82,15 @@ namespace
 				else if (pData->pColorTable)
 				{
 					palette.assign(pData->pColorTable, pData->pColorTable + 256);
-					auto sysPal = Gdi::Palette::getSystemPalette();
+					// Explicit entries index the hardware palette. In windowed modes the system palette is
+					// the same, but in fullscreen it keeps the standard static colors for GDI windows,
+					// while the surface's pixels mean the game's colors.
+					auto hwPal = Gdi::Palette::getHardwarePalette();
 					for (UINT i = 0; i < 256; ++i)
 					{
 						if (palette[i].peFlags & PC_EXPLICIT)
 						{
-							palette[i] = sysPal[palette[i].peRed];
+							palette[i] = hwPal[palette[i].peRed];
 						}
 					}
 					pData->pColorTable = palette.data();
