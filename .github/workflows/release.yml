@@ -24,27 +24,23 @@ jobs:
 
       - uses: microsoft/setup-msbuild@v2
 
-      # DDrawCompat needs a few driver-kit headers that are not in the default user-mode include path.
-      - name: Locate DDK headers
+      # Match upstream's build environment: VS 2019 toolset (v142), Windows SDK 10.0.19041 and the
+      # matching WDK 2004 headers (d3dumddi.h). The runner has no 19041 WDK, and newer DDK headers
+      # change the driver interface structs DDrawCompat hooks.
+      - name: Install WDK 2004 (10.0.19041)
         shell: pwsh
         run: |
-          $kits = 'C:\Program Files (x86)\Windows Kits\10\Include'
-          $dir = Join-Path $env:RUNNER_TEMP 'ddk'
-          New-Item -ItemType Directory -Force $dir | Out-Null
-          foreach ($h in 'd3dumddi.h', 'd3dkmthk.h', 'd3dukmdt.h', 'd3dnthal.h', 'ddrawint.h') {
-            $all = Get-ChildItem $kits -Recurse -Filter $h -ErrorAction SilentlyContinue | Sort-Object FullName -Descending
-            $um = $all | Where-Object { $_.FullName -match '\\(um|shared)\\' } | Select-Object -First 1
-            if ($um) { "found $h in $($um.FullName)"; continue }
-            $km = $all | Select-Object -First 1
-            if ($km) { Copy-Item $km.FullName $dir; "copied $h from $($km.FullName)" }
-            else { "::warning::$h not found under $kits" }
+          Invoke-WebRequest 'https://go.microsoft.com/fwlink/?linkid=2128854' -OutFile "$env:RUNNER_TEMP\wdksetup.exe"
+          $p = Start-Process "$env:RUNNER_TEMP\wdksetup.exe" -ArgumentList '/q', '/norestart', '/features', '+' -Wait -PassThru
+          if ($p.ExitCode -ne 0) { "::error::WDK setup failed with exit code $($p.ExitCode)"; exit 1 }
+          if (-not (Test-Path 'C:\Program Files (x86)\Windows Kits\10\Include\10.0.19041.0\um\d3dumddi.h')) {
+            "::error::d3dumddi.h for SDK 10.0.19041.0 not found after WDK setup"; exit 1
           }
-          "CL=/I`"$dir`"" | Out-File -Append -Encoding utf8 $env:GITHUB_ENV
 
       - name: Build
         shell: pwsh
         run: |
-          msbuild DDrawCompat.sln /m /nologo /v:minimal /p:Configuration=Release /p:Platform=x86 /p:PlatformToolset=v143 /p:WindowsTargetPlatformVersion=10.0 2>&1 | Tee-Object -FilePath build.log
+          msbuild DDrawCompat.sln /m /nologo /v:minimal /p:Configuration=Release /p:Platform=x86 2>&1 | Tee-Object -FilePath build.log
           $code = $LASTEXITCODE
           Select-String -Path build.log -Pattern ': (fatal )?error ' | Select-Object -First 40 | ForEach-Object { "::error::" + $_.Line.Trim() }
           exit $code
