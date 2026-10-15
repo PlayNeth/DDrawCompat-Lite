@@ -8,6 +8,7 @@
 #include <D3dDdi/KernelModeThunks.h>
 #include <D3dDdi/ScopedCriticalSection.h>
 #include <DDraw/RealPrimarySurface.h>
+#include <Gdi/Gdi.h>
 #include <Gdi/PresentationWindow.h>
 #include <Gdi/VirtualScreen.h>
 #include <Gdi/Window.h>
@@ -33,6 +34,7 @@ namespace
 		Gdi::Region invalidatedRegion;
 		COLORREF colorKey;
 		BYTE alpha;
+		bool isMenu;
 		bool isLayered;
 		bool isVisibleRegionChanged;
 
@@ -44,6 +46,7 @@ namespace
 			, windowRegion(nullptr)
 			, colorKey(CLR_INVALID)
 			, alpha(255)
+			, isMenu(Gdi::MENU_ATOM == GetClassLong(hwnd, GCW_ATOM))
 			, isLayered(true)
 			, isVisibleRegionChanged(false)
 		{
@@ -200,7 +203,9 @@ namespace
 		g_windowZOrder.push_back(&it->second);
 
 		const LONG exStyle = CALL_ORIG_FUNC(GetWindowLongA)(hwnd, GWL_EXSTYLE);
-		const bool isLayered = exStyle & WS_EX_LAYERED;
+		// Menus are not redirected: they draw their own windows (hover highlights are drawn outside of
+		// WM_PAINT), and are presented like layered windows.
+		const bool isLayered = it->second.isMenu || (exStyle & WS_EX_LAYERED);
 		const bool isVisible = IsWindowVisible(hwnd) && !IsIconic(hwnd);
 		bool setPresentationWindowRgn = false;
 
@@ -247,7 +252,10 @@ namespace
 					visibleRegion = wi.rcWindow;
 				}
 				visibleRegion &= context.virtualScreenRegion;
-				visibleRegion -= context.obscuredRegion;
+				if (!it->second.isMenu)
+				{
+					visibleRegion -= context.obscuredRegion;
+				}
 
 				if (!isLayered && !(exStyle & WS_EX_TRANSPARENT))
 				{
@@ -331,7 +339,7 @@ namespace Gdi
 			{
 				D3dDdi::ScopedCriticalSection lock;
 				auto it = g_windows.find(hwnd);
-				if (it != g_windows.end())
+				if (it != g_windows.end() && !it->second.isMenu)
 				{
 					const bool isLayered = GetWindowLong(hwnd, GWL_EXSTYLE) & WS_EX_LAYERED;
 					if (isLayered != it->second.isLayered)

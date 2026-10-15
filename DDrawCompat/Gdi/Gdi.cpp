@@ -51,8 +51,13 @@ namespace Gdi
 
 	bool isDisplayDc(HDC dc)
 	{
-		return dc && OBJ_DC == GetObjectType(dc) && DT_RASDISPLAY == CALL_ORIG_FUNC(GetDeviceCaps)(dc, TECHNOLOGY) &&
-			!(CALL_ORIG_FUNC(GetWindowLongA)(CALL_ORIG_FUNC(WindowFromDC)(dc), GWL_EXSTYLE) & WS_EX_LAYERED);
+		if (!dc || OBJ_DC != GetObjectType(dc) || DT_RASDISPLAY != CALL_ORIG_FUNC(GetDeviceCaps)(dc, TECHNOLOGY))
+		{
+			return false;
+		}
+		const HWND hwnd = CALL_ORIG_FUNC(WindowFromDC)(dc);
+		return !(CALL_ORIG_FUNC(GetWindowLongA)(hwnd, GWL_EXSTYLE) & WS_EX_LAYERED) &&
+			MENU_ATOM != GetClassLong(hwnd, GCW_ATOM);
 	}
 
 	void redraw(HRGN rgn)
