@@ -301,6 +301,12 @@ namespace D3dDdi
 
 		auto& lockData = m_lockData[data.SubResourceIndex];
 		++Stats::g_locks;
+		auto& stats = getStats();
+		++stats.locks;
+		stats.readOnlyLocks += data.Flags.ReadOnly;
+		stats.writeOnlyLocks += data.Flags.WriteOnly;
+		stats.discardLocks += data.Flags.Discard;
+		stats.areaLocks += data.Flags.AreaValid;
 		const auto& surface = m_fixedData.pSurfList[data.SubResourceIndex];
 		if (data.Flags.AreaValid && (lockData.isVidMemUpToDate || !lockData.isSysMemUpToDate))
 		{
@@ -319,7 +325,17 @@ namespace D3dDdi
 		}
 		if (!lockData.isSysMemUpToDate)
 		{
-			copyToSysMem(data.SubResourceIndex);
+			if (data.Flags.Discard && !data.Flags.ReadOnly && !data.Flags.AreaValid && !data.Flags.RangeValid &&
+				!data.Flags.BoxValid)
+			{
+				// The game discards the old contents of the whole surface, so there is nothing to read back.
+				++Stats::g_discardedReadbacks;
+				lockData.isSysMemUpToDate = true;
+			}
+			else
+			{
+				copyToSysMem(data.SubResourceIndex);
+			}
 		}
 		lockData.isVidMemUpToDate &= data.Flags.ReadOnly;
 		lockData.qpcLastForcedLock = Time::queryPerformanceCounter();
@@ -414,10 +430,16 @@ namespace D3dDdi
 		{
 			LOG_ONCE("ERROR: Resource::copySubResource failed: " << Compat::hex(result));
 		}
-		auto& transfer = dstResource == m_lockResource.get() ? Stats::g_readbacks : Stats::g_uploads;
-		++transfer.count;
-		transfer.bytes += static_cast<unsigned long long>(rect.right) * rect.bottom * m_formatInfo.bytesPerPixel;
-		transfer.qpcTime += Time::queryPerformanceCounter() - qpcStart;
+		const bool isReadback = dstResource == m_lockResource.get();
+		const unsigned long long bytes = static_cast<unsigned long long>(rect.right) * rect.bottom * m_formatInfo.bytesPerPixel;
+		const long long qpcTime = Time::queryPerformanceCounter() - qpcStart;
+		for (auto transfer : { isReadback ? &Stats::g_readbacks : &Stats::g_uploads,
+			isReadback ? &getStats().readbacks : &getStats().uploads })
+		{
+			++transfer->count;
+			transfer->bytes += bytes;
+			transfer->qpcTime += qpcTime;
+		}
 
 		D3DDDIARG_LOCK lock = {};
 		lock.hResource = m_lockResource.get();
@@ -784,6 +806,21 @@ namespace D3dDdi
 		}
 
 		return LOG_RESULT(S_OK);
+	}
+
+	Stats::Entry& Resource::getStats()
+	{
+		if (!m_stats)
+		{
+			const auto& flags = m_fixedData.Flags;
+			char key[128] = {};
+			sprintf_s(key, "%ux%u format %u%s%s%s%s%s", m_fixedData.pSurfList[0].Width, m_fixedData.pSurfList[0].Height,
+				static_cast<UINT>(m_fixedData.Format),
+				flags.Primary ? " primary" : "", flags.RenderTarget ? " render target" : "",
+				flags.Texture ? " texture" : "", flags.ZBuffer ? " z-buffer" : "", flags.Overlay ? " overlay" : "");
+			m_stats = &Stats::getEntry(key);
+		}
+		return *m_stats;
 	}
 
 	HRESULT Resource::sysMemPreferredBlt(const D3DDDIARG_BLT& data, Resource& srcResource)

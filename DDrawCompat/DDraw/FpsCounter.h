@@ -14,5 +14,6 @@ namespace DDraw
 		void logSummary();
 		void onFlip();
 		void onPresent();
+		void releaseResources();
 	}
 }

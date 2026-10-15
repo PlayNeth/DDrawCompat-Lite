@@ -12,6 +12,11 @@ namespace D3dDdi
 {
 	class Device;
 
+	namespace Stats
+	{
+		struct Entry;
+	}
+
 	class Resource
 	{
 	public:
@@ -123,6 +128,7 @@ namespace D3dDdi
 		void initPalettizedTexture();
 		HRESULT palettizedBlt(const D3DDDIARG_BLT& data, Resource* srcResource);
 		void uploadPalettizedLevel(UINT subResourceIndex);
+		Stats::Entry& getStats();
 
 		Device& m_device;
 		HANDLE m_handle;
@@ -133,5 +139,6 @@ namespace D3dDdi
 		std::vector<LockData> m_lockData;
 		std::unique_ptr<void, ResourceDeleter> m_lockResource;
 		std::unique_ptr<PalettizedData> m_palettized;
+		Stats::Entry* m_stats = nullptr;
 	};
 }

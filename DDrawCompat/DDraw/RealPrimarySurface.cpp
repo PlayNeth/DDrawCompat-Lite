@@ -128,6 +128,7 @@ namespace
 	{
 		LOG_FUNC("RealPrimarySurface::onRelease");
 
+		DDraw::FpsCounter::releaseResources();
 		g_frontBuffer = nullptr;
 		g_clipper.release();
 		g_isFullScreen = false;
