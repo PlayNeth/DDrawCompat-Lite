@@ -3,6 +3,7 @@
 #include <Common/Hook.h>
 #include <Common/Log.h>
 #include <Common/ScopedSrwLock.h>
+#include <Config/Config.h>
 #include <Gdi/Gdi.h>
 #include <Gdi/Palette.h>
 #include <Gdi/VirtualScreen.h>
@@ -32,6 +33,7 @@ namespace
 	UINT g_systemPaletteLastNonReservedIndex = 245;
 
 	std::map<HPALETTE, PaletteInfo> g_paletteInfo;
+	std::vector<RECT> g_gdiWindowRects;
 
 	bool isSameColor(PALETTEENTRY entry1, PALETTEENTRY entry2)
 	{
@@ -316,10 +318,44 @@ namespace Gdi
 			HOOK_FUNCTION(gdi32, UnrealizeObject, unrealizeObject);
 		}
 
+		std::vector<RECT> getGdiWindowRects()
+		{
+			Compat::ScopedSrwLockShared lock(g_srwLock);
+			return g_gdiWindowRects;
+		}
+
+		void setGdiWindowRects(std::vector<RECT> rects)
+		{
+			Compat::ScopedSrwLockExclusive lock(g_srwLock);
+			g_gdiWindowRects.swap(rects);
+		}
+
 		void setHardwarePalette(PALETTEENTRY* entries)
 		{
 			Compat::ScopedSrwLockExclusive lock(g_srwLock);
 			std::memcpy(g_hardwarePalette, entries, sizeof(g_hardwarePalette));
+
+			if (Config::dialogColors)
+			{
+				// Like Windows does with a static system palette: GDI sees the game's colors in the
+				// non-reserved entries, while the reserved (static) entries keep the standard
+				// window colors, even if the game overwrote them in the hardware palette.
+				bool isChanged = false;
+				for (UINT i = g_systemPaletteFirstNonReservedIndex; i <= g_systemPaletteLastNonReservedIndex; ++i)
+				{
+					if (!isSameColor(g_systemPalette[i], entries[i]))
+					{
+						g_systemPalette[i] = entries[i];
+						isChanged = true;
+					}
+					g_systemPalette[i].peFlags = 0;
+				}
+				if (isChanged)
+				{
+					g_systemPaletteFirstUnusedIndex = g_systemPaletteLastNonReservedIndex + 1;
+					Gdi::VirtualScreen::updatePalette(g_systemPalette);
+				}
+			}
 		}
 	}
 }

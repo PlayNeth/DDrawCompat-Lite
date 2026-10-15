@@ -22,6 +22,7 @@ namespace DDraw
 		static CompatPtr<IDirectDrawSurface7> getBackBuffer();
 		static CompatPtr<IDirectDrawSurface7> getLastSurface();
 		static CompatWeakPtr<IDirectDrawSurface7> getPrimary();
+		static HWND getDeviceWindow();
 		static HANDLE getFrontResource();
 		static DWORD getOrigCaps();
 		static void updatePalette();

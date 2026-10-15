@@ -7,6 +7,7 @@ A fork of DDrawCompat v0.3.2 (with narzoul's Windows 11 24H2 fix) kept intention
 | Logging | `off`, `on`, `verbose` | No log file unless enabled; `verbose` adds mode/surface/device details and a frame rate summary |
 | FpsCounter | `off`, `on` | Overlay with current FPS, average, 1% and 0.1% lows (fullscreen) |
 | PalettizedTextures | `on`, `off` | Emulates 8-bit palettized textures automatically for games that use them |
+| DialogColors | `on`, `off` | Keeps standard window colors in dialogs over 8-bit fullscreen games |
 | AlternatePixelCenter | `off`, `on`, `custom(N)` | Shifts pre-transformed vertices by -0.5 or N/100 pixel; points and lines are left alone |
 | VSync | `app`, `off`, `on(N)` | Overrides the game's flip interval |
 | FpsLimiter | `off`, `flipstart(N)`, `flipend(N)` | Caps the flip rate to N FPS |
