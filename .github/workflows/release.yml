@@ -58,6 +58,19 @@ jobs:
           Copy-Item DDrawCompat.ini, LICENSE.txt pkg\
           Compress-Archive pkg\* "DDrawCompat-Lite-$env:TAG.zip"
 
+      - name: Release notes
+        shell: pwsh
+        run: |
+          $notes = @(
+            'Lightweight DDrawCompat based on v0.3.2 (with the Windows 11 24H2 fix), configurable through an'
+            'optional `DDrawCompat.ini`. See the README and the sample `DDrawCompat.ini` for all settings and defaults.'
+            ''
+            'Installation: copy `ddraw.dll` (and optionally `DDrawCompat.ini`) next to the game''s .exe.'
+          )
+          $file = ".github/release-notes/$env:TAG.md"
+          if (Test-Path $file) { $notes += ''; $notes += Get-Content $file }
+          $notes | Out-File -Encoding utf8 notes.md
+
       - uses: actions/upload-artifact@v4
         with:
           name: DDrawCompat-Lite
@@ -70,8 +83,4 @@ jobs:
           name: DDrawCompat-Lite ${{ env.TAG }}
           prerelease: ${{ contains(env.TAG, '-') }}
           files: DDrawCompat-Lite-*.zip
-          body: |
-            Lightweight DDrawCompat based on v0.3.2 (with the Windows 11 24H2 fix), configurable through an
-            optional `DDrawCompat.ini`. See the README and the sample `DDrawCompat.ini` for all settings and defaults.
-
-            Installation: copy `ddraw.dll` (and optionally `DDrawCompat.ini`) next to the game's .exe.
+          body_path: notes.md
