@@ -21,6 +21,9 @@ jobs:
         run: |
           $version = (Get-Content VERSION -Raw).Trim()
           "TAG=v$version" | Out-File -Append -Encoding utf8 $env:GITHUB_ENV
+          # Versions containing "debuglogs" are diagnostic builds that log every hooked call.
+          $config = if ($version -match 'debuglogs') { 'ReleaseWithDebugLogs' } else { 'Release' }
+          "CONFIG=$config" | Out-File -Append -Encoding utf8 $env:GITHUB_ENV
 
       - uses: microsoft/setup-msbuild@v2
 
@@ -40,7 +43,7 @@ jobs:
       - name: Build
         shell: pwsh
         run: |
-          msbuild DDrawCompat.sln /m /nologo /v:minimal /p:Configuration=Release /p:Platform=x86 2>&1 | Tee-Object -FilePath build.log
+          msbuild DDrawCompat.sln /m /nologo /v:minimal /p:Configuration=$env:CONFIG /p:Platform=x86 2>&1 | Tee-Object -FilePath build.log
           $code = $LASTEXITCODE
           Select-String -Path build.log -Pattern ': (fatal )?error ' | Select-Object -First 40 | ForEach-Object { "::error::" + $_.Line.Trim() }
           exit $code
@@ -48,7 +51,7 @@ jobs:
       - name: Package
         shell: pwsh
         run: |
-          $dll = Get-ChildItem -Recurse -Filter ddraw.dll | Where-Object { $_.FullName -match '\\Release\\' } | Select-Object -First 1
+          $dll = Get-ChildItem -Recurse -Filter ddraw.dll | Where-Object { $_.FullName -match "\\$env:CONFIG\\" } | Select-Object -First 1
           if (-not $dll) { "::error::ddraw.dll not found"; exit 1 }
           New-Item -ItemType Directory pkg | Out-Null
           Copy-Item $dll.FullName pkg\
