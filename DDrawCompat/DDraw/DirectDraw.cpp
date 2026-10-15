@@ -1,3 +1,5 @@
+#include <map>
+#include <sstream>
 #include <string>
 #include <type_traits>
 
@@ -19,6 +21,8 @@ namespace
 		LOG_ONCE("COM instantiation of DirectDraw detected");
 	}
 
+	std::map<std::string, unsigned> g_surfaceCounts;
+
 	template <typename TSurfaceDesc>
 	void logSurfaceCreation(const TSurfaceDesc& desc, HRESULT result)
 	{
@@ -34,18 +38,28 @@ namespace
 		else if (caps & DDSCAPS_VIDEOMEMORY) { kind += " (video memory)"; }
 		if (caps & DDSCAPS_MIPMAP) { kind += ", mipmapped"; }
 
-		auto log = Compat::Log();
-		log << "CreateSurface: " << kind;
-		if (desc.dwFlags & DDSD_WIDTH) { log << ", " << desc.dwWidth << 'x' << desc.dwHeight; }
-		if (desc.dwFlags & DDSD_BACKBUFFERCOUNT) { log << ", " << desc.dwBackBufferCount << " back buffer(s)"; }
+		std::ostringstream oss;
+		oss << kind;
+		if (desc.dwFlags & DDSD_WIDTH) { oss << ", " << desc.dwWidth << 'x' << desc.dwHeight; }
+		if (desc.dwFlags & DDSD_BACKBUFFERCOUNT) { oss << ", " << desc.dwBackBufferCount << " back buffer(s)"; }
 		if (desc.dwFlags & DDSD_PIXELFORMAT)
 		{
 			const auto& pf = desc.ddpfPixelFormat;
-			if (pf.dwFlags & DDPF_PALETTEINDEXED8) { log << ", 8-bit palettized"; }
-			else if (pf.dwFlags & DDPF_FOURCC) { log << ", FourCC " << Compat::hex(pf.dwFourCC); }
-			else { log << ", " << pf.dwRGBBitCount << "-bit" << ((pf.dwFlags & DDPF_ALPHAPIXELS) ? " with alpha" : ""); }
+			if (pf.dwFlags & DDPF_PALETTEINDEXED8) { oss << ", 8-bit palettized"; }
+			else if (pf.dwFlags & DDPF_FOURCC) { oss << ", FourCC 0x" << std::hex << pf.dwFourCC << std::dec; }
+			else { oss << ", " << pf.dwRGBBitCount << "-bit" << ((pf.dwFlags & DDPF_ALPHAPIXELS) ? " with alpha" : ""); }
 		}
-		log << ", result " << Compat::hex(result);
+		if (FAILED(result))
+		{
+			oss << ", failed: 0x" << std::hex << static_cast<DWORD>(result);
+		}
+
+		// Games create thousands of identical surfaces (textures); log each kind once and count the rest.
+		const std::string description = oss.str();
+		if (1 == ++g_surfaceCounts[description])
+		{
+			Compat::Log() << "CreateSurface: " << description;
+		}
 	}
 
 	template <typename TDirectDraw, typename TSurfaceDesc, typename TSurface>
@@ -275,6 +289,14 @@ namespace DDraw
 			}
 
 			return pf;
+		}
+
+		void logSurfaceSummary()
+		{
+			for (const auto& surface : g_surfaceCounts)
+			{
+				Compat::Log() << "Surfaces created: " << surface.second << " x " << surface.first;
+			}
 		}
 
 		void suppressEmulatedDirectDraw(GUID*& guid)

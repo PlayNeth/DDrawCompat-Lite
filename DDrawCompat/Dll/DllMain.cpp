@@ -261,6 +261,7 @@ BOOL WINAPI DllMain(HINSTANCE hinstDLL, DWORD fdwReason, LPVOID lpvReserved)
 	{
 		if (Compat::Log::isVerbose())
 		{
+			DDraw::DirectDraw::logSurfaceSummary();
 			DDraw::FpsCounter::logSummary();
 		}
 		Compat::Log() << "DDrawCompat detached successfully";
