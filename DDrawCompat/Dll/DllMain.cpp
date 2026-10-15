@@ -12,6 +12,7 @@
 #include <Config/Config.h>
 #include <version.h>
 #include <D3dDdi/Hooks.h>
+#include <D3dDdi/Stats.h>
 #include <DDraw/DirectDraw.h>
 #include <DDraw/FpsCounter.h>
 #include <DDraw/Hooks.h>
@@ -263,6 +264,7 @@ BOOL WINAPI DllMain(HINSTANCE hinstDLL, DWORD fdwReason, LPVOID lpvReserved)
 		{
 			DDraw::DirectDraw::logSurfaceSummary();
 			DDraw::FpsCounter::logSummary();
+			D3dDdi::Stats::log();
 		}
 		Compat::Log() << "DDrawCompat detached successfully";
 	}

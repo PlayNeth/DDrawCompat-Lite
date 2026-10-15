@@ -12,6 +12,7 @@
 #include <D3dDdi/KernelModeThunks.h>
 #include <D3dDdi/Log/DeviceFuncsLog.h>
 #include <D3dDdi/Resource.h>
+#include <D3dDdi/Stats.h>
 #include <DDraw/Blitter.h>
 #include <Gdi/Palette.h>
 #include <Gdi/VirtualScreen.h>
@@ -299,6 +300,23 @@ namespace D3dDdi
 		LOG_FUNC("Resource::bltLock", data);
 
 		auto& lockData = m_lockData[data.SubResourceIndex];
+		++Stats::g_locks;
+		const auto& surface = m_fixedData.pSurfList[data.SubResourceIndex];
+		if (data.Flags.AreaValid && (lockData.isVidMemUpToDate || !lockData.isSysMemUpToDate))
+		{
+			const unsigned long long areaBytes = static_cast<unsigned long long>(data.Area.right - data.Area.left) *
+				(data.Area.bottom - data.Area.top) * m_formatInfo.bytesPerPixel;
+			const unsigned long long fullBytes =
+				static_cast<unsigned long long>(surface.Width) * surface.Height * m_formatInfo.bytesPerPixel;
+			if (areaBytes * 4 <= fullBytes && (!lockData.isSysMemUpToDate || !data.Flags.ReadOnly))
+			{
+				// Each such lock costs a full readback and/or a full upload before the next GPU use.
+				++Stats::g_smallLocks;
+				Stats::g_smallLockBytes += areaBytes;
+				Stats::g_smallLockFullBytes += fullBytes *
+					((!lockData.isSysMemUpToDate ? 1 : 0) + (!data.Flags.ReadOnly ? 1 : 0));
+			}
+		}
 		if (!lockData.isSysMemUpToDate)
 		{
 			copyToSysMem(data.SubResourceIndex);
@@ -390,11 +408,16 @@ namespace D3dDdi
 		data.DstSubResourceIndex = subResourceIndex;
 		data.DstRect = rect;
 
+		const long long qpcStart = Time::queryPerformanceCounter();
 		HRESULT result = m_device.getOrigVtable().pfnBlt(m_device, &data);
 		if (FAILED(result))
 		{
 			LOG_ONCE("ERROR: Resource::copySubResource failed: " << Compat::hex(result));
 		}
+		auto& transfer = dstResource == m_lockResource.get() ? Stats::g_readbacks : Stats::g_uploads;
+		++transfer.count;
+		transfer.bytes += static_cast<unsigned long long>(rect.right) * rect.bottom * m_formatInfo.bytesPerPixel;
+		transfer.qpcTime += Time::queryPerformanceCounter() - qpcStart;
 
 		D3DDDIARG_LOCK lock = {};
 		lock.hResource = m_lockResource.get();
