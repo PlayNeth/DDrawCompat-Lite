@@ -228,6 +228,7 @@ namespace
 		}
 		g_isDbgEngInitialized = true;
 
+		Compat::Log() << "DbgEng: initializing";
 		Compat::hookIatFunction(GetModuleHandle("dbgeng"), "GetProcAddress", dbgEngGetProcAddress);
 
 		HRESULT result = S_OK;
@@ -240,6 +241,7 @@ namespace
 			return false;
 		}
 
+		Compat::Log() << "DbgEng: opening module image";
 		result = g_debugClient->OpenDumpFileWide(Compat::getModulePath(Dll::g_currentModule).c_str(), 0);
 		if (FAILED(result))
 		{
@@ -248,7 +250,9 @@ namespace
 		}
 
 		g_debugControl->SetEngineOptions(DEBUG_ENGOPT_DISABLE_MODULE_SYMBOL_LOAD);
+		Compat::Log() << "DbgEng: waiting for event";
 		result = g_debugControl->WaitForEvent(0, INFINITE);
+		Compat::Log() << "DbgEng: event received";
 		if (FAILED(result))
 		{
 			Compat::Log() << "ERROR: DbgEng: WaitForEvent failed: " << Compat::hex(result);
