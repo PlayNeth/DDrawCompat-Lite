@@ -93,7 +93,6 @@ namespace
 			Direct3d::installHooks(dd, dd7);
 			Compat::Log() << "Installing GDI hooks";
 			Gdi::installHooks();
-			Compat::closeDbgEng();
 			Gdi::PresentationWindow::startThread();
 			Compat::Log() << "Finished installing hooks";
 			isAlreadyInstalled = true;
@@ -190,7 +189,6 @@ BOOL WINAPI DllMain(HINSTANCE hinstDLL, DWORD fdwReason, LPVOID lpvReserved)
 			return FALSE;
 		}
 
-		Compat::Log() << "Startup: loading system ddraw.dll";
 		Dll::g_origDDrawModule = LoadLibraryW((systemPath / "ddraw.dll").c_str());
 		if (!Dll::g_origDDrawModule)
 		{
@@ -204,7 +202,6 @@ BOOL WINAPI DllMain(HINSTANCE hinstDLL, DWORD fdwReason, LPVOID lpvReserved)
 		HMODULE origModule = Dll::g_origDDrawModule;
 		VISIT_DDRAW_PROCS(LOAD_ORIG_PROC);
 
-		Compat::Log() << "Startup: loading system dciman32.dll";
 		Dll::g_origDciman32Module = LoadLibraryW((systemPath / "dciman32.dll").c_str());
 		if (Dll::g_origDciman32Module)
 		{
@@ -214,9 +211,7 @@ BOOL WINAPI DllMain(HINSTANCE hinstDLL, DWORD fdwReason, LPVOID lpvReserved)
 
 		Dll::g_jmpTargetProcs = Dll::g_origProcs;
 
-		Compat::Log() << "Startup: hooking DirectDraw exports";
 		VISIT_PUBLIC_DDRAW_PROCS(HOOK_DDRAW_PROC)
-		Compat::Log() << "Startup: setting process options";
 
 		const BOOL disablePriorityBoost = TRUE;
 		SetProcessPriorityBoost(GetCurrentProcess(), disablePriorityBoost);
@@ -225,14 +220,10 @@ BOOL WINAPI DllMain(HINSTANCE hinstDLL, DWORD fdwReason, LPVOID lpvReserved)
 		setDpiAwareness();
 		SetThemeAppProperties(0);
 
-		Compat::Log() << "Startup: installing early hooks";
 		Win32::MemoryManagement::installHooks();
 		Win32::Registry::installEarlyHooks();
 		Win32::MsgHooks::installHooks();
 		Time::init();
-		Compat::Log() << "Startup: closing DbgEng";
-		Compat::closeDbgEng();
-		Compat::Log() << "Startup: SetAppCompatData";
 
 		const DWORD disableMaxWindowedMode = 12;
 		CALL_ORIG_PROC(SetAppCompatData)(disableMaxWindowedMode, 0);

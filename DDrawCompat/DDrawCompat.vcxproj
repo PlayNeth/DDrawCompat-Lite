@@ -167,6 +167,7 @@
     <ClInclude Include="Common\CompatRef.h" />
     <ClInclude Include="Common\CompatVtable.h" />
     <ClInclude Include="Common\CompatWeakPtr.h" />
+    <ClInclude Include="Common\Disasm.h" />
     <ClInclude Include="Common\HResultException.h" />
     <ClInclude Include="Common\Log.h" />
     <ClInclude Include="Common\Path.h" />
@@ -267,6 +268,7 @@
     <ClInclude Include="Win32\WaitFunctions.h" />
   </ItemGroup>
   <ItemGroup>
+    <ClCompile Include="Common\Disasm.cpp" />
     <ClCompile Include="Common\Log.cpp" />
     <ClCompile Include="Common\Hook.cpp" />
     <ClCompile Include="Common\Path.cpp" />
