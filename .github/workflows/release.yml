@@ -65,6 +65,7 @@ jobs:
           tag_name: ${{ env.TAG }}
           target_commitish: ${{ github.sha }}
           name: DDrawCompat-Lite ${{ env.TAG }}
+          prerelease: ${{ contains(env.TAG, '-') }}
           files: DDrawCompat-Lite-*.zip
           body: |
             Based on DDrawCompat v0.3.2, with new optional settings read from `DDrawCompat.ini`:
