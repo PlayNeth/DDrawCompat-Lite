@@ -5,6 +5,7 @@
 #include <functional>
 #include <vector>
 
+#include <Common/CompatPtr.h>
 #include <Common/Hook.h>
 #include <Common/Log.h>
 #include <Common/Time.h>
@@ -33,6 +34,14 @@ namespace
 
 	HFONT g_font = nullptr;
 	LONG g_fontHeight = 0;
+
+	// The text is drawn once per update into a small system memory surface, which is then blitted to
+	// the back buffer every frame. Drawing with GetDC on the back buffer itself would force a full
+	// readback and upload of the back buffer on every frame.
+	CompatPtr<IDirectDrawSurface7> g_textSurface;
+	void* g_textSurfaceDd = nullptr;
+	SIZE g_textSurfaceSize = {};
+	bool g_isTextSurfaceDirty = true;
 
 	void addFrame(long long qpcNow)
 	{
@@ -149,38 +158,99 @@ namespace DDraw
 			{
 				g_qpcLastTextUpdate = qpcNow;
 				updateText(qpcNow);
+				g_isTextSurfaceDirty = true;
 			}
 			if (!g_text[0])
 			{
 				return;
 			}
 
-			HDC dc = nullptr;
-			const UINT D3DDDIFMT_UNKNOWN = 0;
-			const UINT D3DDDIFMT_X8R8G8B8 = 22;
-			D3dDdi::KernelModeThunks::setDcFormatOverride(D3DDDIFMT_X8R8G8B8);
-			surface->GetDC(&surface, &dc);
-			D3dDdi::KernelModeThunks::setDcFormatOverride(D3DDDIFMT_UNKNOWN);
-			if (!dc)
+			CompatPtr<IUnknown> ddUnknown;
+			surface->GetDDInterface(&surface, reinterpret_cast<void**>(&ddUnknown.getRef()));
+			if (!ddUnknown)
+			{
+				return;
+			}
+			IDirectDraw7* ddRaw = nullptr;
+			ddUnknown->QueryInterface(ddUnknown, IID_IDirectDraw7, reinterpret_cast<void**>(&ddRaw));
+			CompatPtr<IDirectDraw7> dd(ddRaw);
+			if (!dd)
 			{
 				return;
 			}
 
+			if (g_textSurface && (dd.get() != g_textSurfaceDd || FAILED(g_textSurface->IsLost(g_textSurface))))
+			{
+				releaseResources();
+			}
+
 			const LONG height = std::max<LONG>(12, static_cast<LONG>(surfaceHeight) / 45);
-			auto prevFont = SelectObject(dc, getFont(height));
-			SetTextColor(dc, RGB(255, 255, 0));
-			SetBkColor(dc, RGB(0, 0, 0));
-
-			const int length = static_cast<int>(strlen(g_text));
-			SIZE size = {};
-			GetTextExtentPoint32A(dc, g_text, length, &size);
 			const int margin = height / 3;
-			RECT rect = { margin, margin, margin + size.cx + 2 * margin, margin + size.cy + margin };
-			CALL_ORIG_FUNC(ExtTextOutA)(dc, rect.left + margin, rect.top + margin / 2, ETO_OPAQUE, &rect,
-				g_text, length, nullptr);
+			const int length = static_cast<int>(strlen(g_text));
 
-			SelectObject(dc, prevFont);
-			surface->ReleaseDC(&surface, dc);
+			if (!g_textSurface || g_isTextSurfaceDirty)
+			{
+				HDC measureDc = CreateCompatibleDC(nullptr);
+				auto prevFont = SelectObject(measureDc, getFont(height));
+				SIZE textSize = {};
+				GetTextExtentPoint32A(measureDc, g_text, length, &textSize);
+				SelectObject(measureDc, prevFont);
+				DeleteDC(measureDc);
+
+				// Round the width up so small changes in the text don't recreate the surface every update.
+				const SIZE size = { (textSize.cx + 2 * margin + 63) / 64 * 64, textSize.cy + margin };
+				if (g_textSurface && (size.cx != g_textSurfaceSize.cx || size.cy != g_textSurfaceSize.cy))
+				{
+					releaseResources();
+				}
+
+				if (!g_textSurface)
+				{
+					DDSURFACEDESC2 desc = {};
+					desc.dwSize = sizeof(desc);
+					desc.dwFlags = DDSD_CAPS | DDSD_WIDTH | DDSD_HEIGHT | DDSD_PIXELFORMAT;
+					desc.dwWidth = size.cx;
+					desc.dwHeight = size.cy;
+					desc.ddsCaps.dwCaps = DDSCAPS_OFFSCREENPLAIN | DDSCAPS_SYSTEMMEMORY;
+					desc.ddpfPixelFormat.dwSize = sizeof(desc.ddpfPixelFormat);
+					desc.ddpfPixelFormat.dwFlags = DDPF_RGB;
+					desc.ddpfPixelFormat.dwRGBBitCount = 32;
+					desc.ddpfPixelFormat.dwRBitMask = 0xFF0000;
+					desc.ddpfPixelFormat.dwGBitMask = 0x00FF00;
+					desc.ddpfPixelFormat.dwBBitMask = 0x0000FF;
+					if (FAILED(dd->CreateSurface(dd, &desc, &g_textSurface.getRef(), nullptr)))
+					{
+						return;
+					}
+					g_textSurfaceDd = dd.get();
+					g_textSurfaceSize = size;
+				}
+
+				HDC dc = nullptr;
+				g_textSurface->GetDC(g_textSurface, &dc);
+				if (!dc)
+				{
+					return;
+				}
+				auto prevFont = SelectObject(dc, getFont(height));
+				SetTextColor(dc, RGB(255, 255, 0));
+				SetBkColor(dc, RGB(0, 0, 0));
+				RECT rect = { 0, 0, size.cx, size.cy };
+				CALL_ORIG_FUNC(ExtTextOutA)(dc, margin, margin / 2, ETO_OPAQUE, &rect, g_text, length, nullptr);
+				SelectObject(dc, prevFont);
+				g_textSurface->ReleaseDC(g_textSurface, dc);
+				g_isTextSurfaceDirty = false;
+			}
+
+			RECT dstRect = { margin, margin, margin + g_textSurfaceSize.cx, margin + g_textSurfaceSize.cy };
+			surface->Blt(&surface, &dstRect, g_textSurface, nullptr, DDBLT_WAIT, nullptr);
+		}
+
+		void releaseResources()
+		{
+			g_textSurface.release();
+			g_textSurfaceDd = nullptr;
+			g_isTextSurfaceDirty = true;
 		}
 
 		void logSummary()
