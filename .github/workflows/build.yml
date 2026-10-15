@@ -4,6 +4,7 @@ name: Build check
 on:
   push:
     branches: ['dev/**']
+    paths-ignore: ['VERSION']
 
 jobs:
   build:

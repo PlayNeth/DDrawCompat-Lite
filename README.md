@@ -1,17 +1,21 @@
-# DDrawCompat-lite
+# DDrawCompat-Lite
 
-A fork of DDrawCompat v0.3.2 kept intentionally small. It adds a handful of settings read from an optional `DDrawCompat.ini` (see the sample in the repository root), using the same key names and value syntax as later DDrawCompat versions where they exist:
+A fork of DDrawCompat v0.3.2 (with narzoul's Windows 11 24H2 fix) kept intentionally small. It adds a handful of settings read from an optional `DDrawCompat.ini` (see the sample in the repository root), using the same key names and value syntax as later DDrawCompat versions where they exist:
 
-| Setting | Values | Notes |
+| Setting | Values (default first) | Notes |
 |---|---|---|
+| Logging | `off`, `on`, `verbose` | No log file unless enabled; `verbose` adds mode/surface/device details and a frame rate summary |
+| FpsCounter | `off`, `on` | Overlay with current FPS, average, 1% and 0.1% lows (fullscreen) |
+| PalettizedTextures | `on`, `off` | Emulates 8-bit palettized textures automatically for games that use them |
 | AlternatePixelCenter | `off`, `on`, `custom(N)` | Shifts pre-transformed vertices by -0.5 or N/100 pixel; points and lines are left alone |
 | VSync | `app`, `off`, `on(N)` | Overrides the game's flip interval |
 | FpsLimiter | `off`, `flipstart(N)`, `flipend(N)` | Caps the flip rate to N FPS |
-| CpuSpeed | `app`, MHz | Fakes the registry `~MHz` value only |
-| VideoMemory | `app`, MB | Fakes DirectDraw `GetCaps`/`GetAvailableVidMem` |
-| SystemMemory | `app`, MB | Fakes `GlobalMemoryStatus(Ex)` physical memory |
+| CpuAffinity | `1`, `app`, `all`, core list | Cores the game runs on (v0.3.2 always used core 1) |
+| CpuSpeed | `2000`, `app`, MHz | Fakes the registry `~MHz` value only |
+| VideoMemory | `256`, `app`, MB | Fakes DirectDraw `GetCaps`/`GetAvailableVidMem` |
+| SystemMemory | `1024`, `app`, MB | Fakes `GlobalMemoryStatus(Ex)` physical memory |
 
-With no ini file, behavior is identical to v0.3.2. The parsed settings are written to the log.
+The reported-hardware defaults are values a DirectX 7 era game expects, low enough to avoid the overflows such games hit on modern systems. Set them to `app` to report real values.
 
 ---
 
