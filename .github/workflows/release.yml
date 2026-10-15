@@ -3,7 +3,7 @@ name: Build and release
 # Bump the version in the VERSION file and push to the lite branch to publish a release.
 on:
   push:
-    branches: [lite]
+    branches: [lite, 'dev/**']
     paths: ['VERSION']
   workflow_dispatch:
 
@@ -68,8 +68,7 @@ jobs:
           prerelease: ${{ contains(env.TAG, '-') }}
           files: DDrawCompat-Lite-*.zip
           body: |
-            Based on DDrawCompat v0.3.2, with new optional settings read from `DDrawCompat.ini`:
-            AlternatePixelCenter, VSync, FpsLimiter, CpuSpeed, VideoMemory and SystemMemory.
-            See the README and the sample `DDrawCompat.ini` for details. Without an ini file it behaves exactly like v0.3.2.
+            Lightweight DDrawCompat based on v0.3.2 (with the Windows 11 24H2 fix), configurable through an
+            optional `DDrawCompat.ini`. See the README and the sample `DDrawCompat.ini` for all settings and defaults.
 
             Installation: copy `ddraw.dll` (and optionally `DDrawCompat.ini`) next to the game's .exe.
