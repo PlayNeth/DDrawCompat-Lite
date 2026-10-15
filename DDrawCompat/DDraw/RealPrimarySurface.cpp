@@ -18,6 +18,7 @@
 #include <DDraw/Types.h>
 #include <Gdi/Caret.h>
 #include <Gdi/Gdi.h>
+#include <Gdi/Palette.h>
 #include <Gdi/VirtualScreen.h>
 #include <Gdi/Window.h>
 #include <Win32/DisplayMode.h>
@@ -163,6 +164,74 @@ namespace
 		}
 	}
 
+	struct GdiWindowEnumData
+	{
+		DWORD processId;
+		HWND deviceWindow;
+		Gdi::Region covered;
+		Gdi::Region gdiWindows;
+	};
+
+	BOOL CALLBACK addGdiWindowRegion(HWND hwnd, LPARAM lParam)
+	{
+		auto& data = *reinterpret_cast<GdiWindowEnumData*>(lParam);
+		DWORD processId = 0;
+		GetWindowThreadProcessId(hwnd, &processId);
+		if (processId != data.processId || !IsWindowVisible(hwnd) || IsIconic(hwnd))
+		{
+			return TRUE;
+		}
+
+		RECT rect = {};
+		GetWindowRect(hwnd, &rect);
+		if (hwnd == data.deviceWindow)
+		{
+			data.covered |= rect;
+			return TRUE;
+		}
+
+		// Layered windows (menus, DDrawCompat's own presentation windows) are presented separately.
+		if ((GetWindowLong(hwnd, GWL_EXSTYLE) & WS_EX_LAYERED) ||
+			Gdi::MENU_ATOM == GetClassLong(hwnd, GCW_ATOM))
+		{
+			return TRUE;
+		}
+
+		Gdi::Region rgn(rect);
+		rgn -= data.covered;
+		data.gdiWindows |= rgn;
+		data.covered |= rect;
+		return TRUE;
+	}
+
+	// Finds the visible parts of the game's other top-level windows (dialogs etc.) on the primary
+	// surface. These are drawn by GDI, which uses the standard static colors of the system palette,
+	// even if the game has overwritten those entries in its own palette.
+	void updateGdiWindowRects(CompatWeakPtr<IDirectDrawSurface7> src, const RECT& monitorRect)
+	{
+		std::vector<RECT> rects;
+		if (Config::dialogColors && g_isFullScreen && 8 == g_surfaceDesc.ddpfPixelFormat.dwRGBBitCount &&
+			src == DDraw::PrimarySurface::getGdiSurface())
+		{
+			GdiWindowEnumData data = { GetCurrentProcessId(), DDraw::PrimarySurface::getDeviceWindow() };
+			EnumWindows(addGdiWindowRegion, reinterpret_cast<LPARAM>(&data));
+			data.gdiWindows &= monitorRect;
+			if (!data.gdiWindows.isEmpty())
+			{
+				data.gdiWindows.offset(-monitorRect.left, -monitorRect.top);
+				const DWORD size = GetRegionData(data.gdiWindows, 0, nullptr);
+				std::vector<BYTE> buffer(size);
+				auto rgnData = reinterpret_cast<RGNDATA*>(buffer.data());
+				if (size && GetRegionData(data.gdiWindows, size, rgnData))
+				{
+					auto first = reinterpret_cast<RECT*>(rgnData->Buffer);
+					rects.assign(first, first + rgnData->rdh.nCount);
+				}
+			}
+		}
+		Gdi::Palette::setGdiWindowRects(std::move(rects));
+	}
+
 	void presentToPrimaryChain(CompatWeakPtr<IDirectDrawSurface7> src)
 	{
 		LOG_FUNC("RealPrimarySurface::presentToPrimaryChain", src);
@@ -179,6 +248,7 @@ namespace
 		Gdi::Region excludeRegion(monitorRect);
 		Gdi::Window::present(excludeRegion);
 
+		updateGdiWindowRects(src, monitorRect);
 		D3dDdi::KernelModeThunks::setDcPaletteOverride(true);
 		bltToPrimaryChain(*src);
 		D3dDdi::KernelModeThunks::setDcPaletteOverride(false);

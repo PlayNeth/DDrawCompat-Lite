@@ -639,6 +639,40 @@ namespace D3dDdi
 					static_cast<const BYTE*>(srcLockData.data) + y * srcLockData.pitch, srcSurface.Width, pal);
 			}
 
+			// Windows drawn by GDI (dialogs etc.) are shown with GDI's own system palette, which keeps
+			// the standard static colors even when the game has overwritten them.
+			const auto gdiWindowRects(&srcResource == Device::getGdiResource()
+				? Gdi::Palette::getGdiWindowRects() : std::vector<RECT>());
+			if (!gdiWindowRects.empty())
+			{
+				auto sysEntries(Gdi::Palette::getSystemPalette());
+				DWORD sysPal[256] = {};
+				bool isDifferent = false;
+				for (UINT i = 0; i < 256; ++i)
+				{
+					sysPal[i] = (sysEntries[i].peRed << 16) | (sysEntries[i].peGreen << 8) | sysEntries[i].peBlue;
+					isDifferent |= sysPal[i] != pal[i];
+				}
+
+				const LONG width = static_cast<LONG>(srcSurface.Width);
+				const LONG height = static_cast<LONG>(srcSurface.Height);
+				for (const auto& r : gdiWindowRects)
+				{
+					const LONG left = max(r.left, 0L);
+					const LONG right = min(r.right, width);
+					if (!isDifferent || left >= right)
+					{
+						continue;
+					}
+					for (LONG y = max(r.top, 0L); y < min(r.bottom, height); ++y)
+					{
+						convertP8Row(reinterpret_cast<DWORD*>(static_cast<BYTE*>(lock.pSurfData) + y * lock.Pitch) + left,
+							static_cast<const BYTE*>(srcLockData.data) + y * srcLockData.pitch + left,
+							right - left, sysPal);
+					}
+				}
+			}
+
 			D3DDDIARG_UNLOCK unlock = {};
 			unlock.hResource = m_handle;
 			unlock.SubResourceIndex = data.DstSubResourceIndex;

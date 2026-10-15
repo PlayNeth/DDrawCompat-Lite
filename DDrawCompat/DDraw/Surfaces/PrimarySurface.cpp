@@ -228,6 +228,11 @@ namespace DDraw
 		g_frontResource = DirectDrawSurface::getDriverResourceHandle(*g_primarySurface);
 	}
 
+	HWND PrimarySurface::getDeviceWindow()
+	{
+		return g_deviceWindow;
+	}
+
 	void PrimarySurface::updatePalette()
 	{
 		if (!s_palette)
