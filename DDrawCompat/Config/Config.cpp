@@ -2,6 +2,7 @@
 #include <cctype>
 #include <fstream>
 #include <string>
+#include <vector>
 
 #include <Common/Log.h>
 #include <Common/Path.h>
@@ -9,18 +10,29 @@
 
 namespace Config
 {
+	Logging logging = Logging::OFF;
 	float alternatePixelCenter = 0.0f;
 	VSync vSync = VSync::APP;
 	unsigned vSyncInterval = 1;
 	FpsLimiter fpsLimiter = FpsLimiter::OFF;
 	unsigned fpsLimit = 60;
-	unsigned cpuSpeed = 0;
-	unsigned videoMemory = 0;
-	unsigned systemMemory = 0;
+	bool fpsCounter = false;
+	bool palettizedTextures = true;
+	unsigned cpuAffinity = 1;
+
+	// Defaults for the reported hardware: what a DirectX 7 era game expects to see, and small enough
+	// to avoid the integer overflows many of them hit on modern systems (CPU speed in Hz overflowing
+	// a signed 32-bit value above ~2.1 GHz, or memory sizes above 2 GB).
+	unsigned cpuSpeed = 2000;
+	unsigned videoMemory = 256;
+	unsigned systemMemory = 1024;
 }
 
 namespace
 {
+	// Messages produced while reading the ini, logged later by Config::logSettings().
+	std::vector<std::string> g_messages;
+
 	struct Value
 	{
 		std::string name;
@@ -111,8 +123,69 @@ namespace
 		return false;
 	}
 
-	bool applySetting(const std::string& key, const Value& value)
+	bool parseOnOff(const Value& value, bool& result)
 	{
+		if (value.hasParam || ("on" != value.name && "off" != value.name))
+		{
+			return false;
+		}
+		result = "on" == value.name;
+		return true;
+	}
+
+	// "app", "all" or a comma-separated list of 1-based CPU core numbers, e.g. "1" or "1,2".
+	bool parseCpuAffinity(const std::string& str, unsigned& result)
+	{
+		if ("app" == str) { result = 0; return true; }
+		if ("all" == str) { result = 0xFFFFFFFF; return true; }
+
+		unsigned mask = 0;
+		std::string::size_type start = 0;
+		while (start <= str.size())
+		{
+			auto end = str.find(',', start);
+			if (std::string::npos == end)
+			{
+				end = str.size();
+			}
+			int core = 0;
+			if (!parseInt(trim(str.substr(start, end - start)), core) || core < 1 || core > 32)
+			{
+				return false;
+			}
+			mask |= 1U << (core - 1);
+			start = end + 1;
+		}
+		result = mask;
+		return 0 != mask;
+	}
+
+	bool applySetting(const std::string& key, const std::string& valueStr, const Value& value)
+	{
+		if ("logging" == key)
+		{
+			if (value.hasParam) { return false; }
+			if ("off" == value.name) { Config::logging = Config::Logging::OFF; return true; }
+			if ("on" == value.name) { Config::logging = Config::Logging::ON; return true; }
+			if ("verbose" == value.name) { Config::logging = Config::Logging::VERBOSE; return true; }
+			return false;
+		}
+
+		if ("fpscounter" == key)
+		{
+			return parseOnOff(value, Config::fpsCounter);
+		}
+
+		if ("palettizedtextures" == key)
+		{
+			return parseOnOff(value, Config::palettizedTextures);
+		}
+
+		if ("cpuaffinity" == key)
+		{
+			return parseCpuAffinity(valueStr, Config::cpuAffinity);
+		}
+
 		if ("alternatepixelcenter" == key)
 		{
 			if ("off" == value.name && !value.hasParam) { Config::alternatePixelCenter = 0.0f; return true; }
@@ -165,7 +238,7 @@ namespace
 			return parseOverride(value, 4095, Config::systemMemory);
 		}
 
-		Compat::Log() << "Config: unknown setting \"" << key << '"';
+		g_messages.push_back("Config: unknown setting \"" + key + '"');
 		return true;
 	}
 
@@ -177,7 +250,7 @@ namespace
 			return;
 		}
 
-		Compat::Log() << "Loading config file: " << path.u8string();
+		g_messages.push_back("Loading config file: " + path.u8string());
 		std::string line;
 		unsigned lineNumber = 0;
 		while (std::getline(file, line))
@@ -198,17 +271,17 @@ namespace
 			const auto eq = line.find('=');
 			if (std::string::npos == eq)
 			{
-				Compat::Log() << "Config: line " << lineNumber << ": missing '='";
+				g_messages.push_back("Config: line " + std::to_string(lineNumber) + ": missing '='");
 				continue;
 			}
 
 			const std::string key = toLower(trim(line.substr(0, eq)));
 			const std::string valueStr = toLower(trim(line.substr(eq + 1)));
 			Value value = {};
-			if (!parseValue(valueStr, value) || !applySetting(key, value))
+			if (!parseValue(valueStr, value) || !applySetting(key, valueStr, value))
 			{
-				Compat::Log() << "Config: line " << lineNumber << ": invalid value \"" << valueStr
-					<< "\" for setting \"" << key << '"';
+				g_messages.push_back("Config: line " + std::to_string(lineNumber) + ": invalid value \"" +
+					valueStr + "\" for setting \"" + key + '"');
 			}
 		}
 	}
@@ -227,14 +300,34 @@ namespace Config
 			loadFile(processIni);
 		}
 
+	}
+
+	void logSettings()
+	{
+		for (const auto& message : g_messages)
+		{
+			Compat::Log() << message;
+		}
+		g_messages.clear();
+
+		auto overrideStr = [](unsigned value, const char* unit)
+		{
+			return 0 == value ? std::string("app") : std::to_string(value) + ' ' + unit;
+		};
+
+		Compat::Log() << "Config: Logging = " << (Logging::VERBOSE == logging ? "verbose" : "on");
 		Compat::Log() << "Config: AlternatePixelCenter = " << alternatePixelCenter;
 		Compat::Log() << "Config: VSync = " << (VSync::APP == vSync ? "app" : VSync::OFF == vSync ? "off" : "on")
 			<< (VSync::ON == vSync ? "(" + std::to_string(vSyncInterval) + ")" : std::string());
 		Compat::Log() << "Config: FpsLimiter = "
 			<< (FpsLimiter::OFF == fpsLimiter ? "off" : FpsLimiter::FLIPSTART == fpsLimiter ? "flipstart" : "flipend")
 			<< (FpsLimiter::OFF != fpsLimiter ? "(" + std::to_string(fpsLimit) + ")" : std::string());
-		Compat::Log() << "Config: CpuSpeed = " << cpuSpeed << " MHz (0 = app)";
-		Compat::Log() << "Config: VideoMemory = " << videoMemory << " MB (0 = app)";
-		Compat::Log() << "Config: SystemMemory = " << systemMemory << " MB (0 = app)";
+		Compat::Log() << "Config: FpsCounter = " << (fpsCounter ? "on" : "off");
+		Compat::Log() << "Config: PalettizedTextures = " << (palettizedTextures ? "on" : "off");
+		Compat::Log() << "Config: CpuAffinity = " << (0 == cpuAffinity ? std::string("app")
+			: 0xFFFFFFFF == cpuAffinity ? std::string("all") : "mask " + std::to_string(cpuAffinity));
+		Compat::Log() << "Config: CpuSpeed = " << overrideStr(cpuSpeed, "MHz");
+		Compat::Log() << "Config: VideoMemory = " << overrideStr(videoMemory, "MB");
+		Compat::Log() << "Config: SystemMemory = " << overrideStr(systemMemory, "MB");
 	}
 }

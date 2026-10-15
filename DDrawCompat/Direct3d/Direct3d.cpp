@@ -3,6 +3,7 @@
 
 #include <Common/CompatPtr.h>
 #include <Common/CompatVtable.h>
+#include <Common/Log.h>
 #include <DDraw/ScopedThreadLock.h>
 #include <DDraw/Surfaces/Surface.h>
 #include <Direct3d/Direct3d.h>
@@ -31,6 +32,18 @@ namespace
 				result = getOrigVtable(This).CreateDevice(This, *iid, lpDDS, lplpD3DDevice, params...);
 				surface->setSizeOverride(0, 0);
 			}
+		}
+
+		if (Compat::Log::isVerbose())
+		{
+			const char* type = "other";
+			if (IID_IDirect3DHALDevice == *iid) { type = "HAL"; }
+			else if (IID_IDirect3DTnLHalDevice == *iid) { type = "T&L HAL"; }
+			else if (IID_IDirect3DRGBDevice == *iid) { type = "RGB (software)"; }
+			else if (IID_IDirect3DMMXDevice == *iid) { type = "MMX (software)"; }
+			else if (IID_IDirect3DRefDevice == *iid) { type = "reference"; }
+			LOG_VERBOSE << "Direct3D device created: " << type << (IID_IDirect3DRampDevice == rclsid ? " (requested ramp)" : "")
+				<< ", result " << Compat::hex(result);
 		}
 
 		if constexpr (std::is_same_v<TDirect3d, IDirect3D7>)

@@ -56,6 +56,11 @@ namespace Compat
 {
 	Log::Log() : m_lock(g_logCs)
 	{
+		if (!s_isEnabled)
+		{
+			return;
+		}
+
 		SYSTEMTIME st = {};
 		GetLocalTime(&st);
 
@@ -76,10 +81,13 @@ namespace Compat
 
 	Log::~Log()
 	{
-		s_logFile << std::endl;
+		if (s_isEnabled)
+		{
+			s_logFile << std::endl;
+		}
 	}
 
-	void Log::initLogging(std::filesystem::path processPath)
+	void Log::initLogging(std::filesystem::path processPath, bool verbose)
 	{
 		if (Compat::isEqual(processPath.extension(), ".exe"))
 		{
@@ -99,12 +107,17 @@ namespace Compat
 			s_logFile.open(logFilePath, std::ios_base::out, SH_DENYWR);
 			if (!s_logFile.fail())
 			{
+				s_isEnabled = true;
+				s_isVerbose = verbose;
 				return;
 			}
 		}
 	}
 
+	bool Log::s_isEnabled = false;
+	bool Log::s_isVerbose = false;
 	thread_local DWORD Log::s_indent = 0;
+
 	thread_local DWORD Log::s_outParamDepth = 0;
 	thread_local bool Log::s_isLeaveLog = false;
 

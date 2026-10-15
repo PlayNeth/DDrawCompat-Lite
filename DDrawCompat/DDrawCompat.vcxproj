@@ -61,14 +61,14 @@
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
     <TargetName>ddraw</TargetName>
     <LinkIncremental>false</LinkIncremental>
-    <IncludePath>$(ProjectDir);$(IncludePath)</IncludePath>
+    <IncludePath>$(ProjectDir);$(IntDir);$(IncludePath)</IncludePath>
     <LibraryPath>$(LibraryPath)</LibraryPath>
     <GenerateManifest>false</GenerateManifest>
     <IntDir>$(SolutionDir)Build\$(Configuration)\</IntDir>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
     <TargetName>ddraw</TargetName>
-    <IncludePath>$(ProjectDir);$(IncludePath)</IncludePath>
+    <IncludePath>$(ProjectDir);$(IntDir);$(IncludePath)</IncludePath>
     <LibraryPath>$(LibraryPath)</LibraryPath>
     <LinkIncremental>false</LinkIncremental>
     <GenerateManifest>false</GenerateManifest>
@@ -76,7 +76,7 @@
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='ReleaseWithDebugLogs|Win32'">
     <TargetName>ddraw</TargetName>
-    <IncludePath>$(ProjectDir);$(IncludePath)</IncludePath>
+    <IncludePath>$(ProjectDir);$(IntDir);$(IncludePath)</IncludePath>
     <LibraryPath>$(LibraryPath)</LibraryPath>
     <LinkIncremental>false</LinkIncremental>
     <GenerateManifest>false</GenerateManifest>
@@ -204,6 +204,7 @@
     <ClInclude Include="D3dDdi\Visitors\DeviceFuncsVisitor.h" />
     <ClInclude Include="DDraw\Blitter.h" />
     <ClInclude Include="DDraw\DirectDraw.h" />
+    <ClInclude Include="DDraw\FpsCounter.h" />
     <ClInclude Include="DDraw\DirectDrawClipper.h" />
     <ClInclude Include="DDraw\DirectDrawGammaControl.h" />
     <ClInclude Include="DDraw\DirectDrawPalette.h" />
@@ -295,6 +296,7 @@
     <ClCompile Include="D3dDdi\ScopedCriticalSection.cpp" />
     <ClCompile Include="DDraw\Blitter.cpp" />
     <ClCompile Include="DDraw\DirectDraw.cpp" />
+    <ClCompile Include="DDraw\FpsCounter.cpp" />
     <ClCompile Include="DDraw\DirectDrawClipper.cpp" />
     <ClCompile Include="DDraw\DirectDrawGammaControl.cpp" />
     <ClCompile Include="DDraw\DirectDrawPalette.cpp" />

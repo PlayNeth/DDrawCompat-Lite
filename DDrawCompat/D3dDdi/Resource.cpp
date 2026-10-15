@@ -1,3 +1,6 @@
+#include <algorithm>
+#include <cstring>
+#include <memory>
 #include <type_traits>
 
 #include <Common/HResultException.h>
@@ -151,15 +154,44 @@ namespace D3dDdi
 			throw HResultException(E_FAIL);
 		}
 
+		if (Config::palettizedTextures &&
+			D3DDDIFMT_P8 == m_origData.Format &&
+			m_origData.Flags.Texture &&
+			!m_origData.Flags.CubeMap &&
+			D3DDDIPOOL_SYSTEMMEM != m_origData.Pool)
+		{
+			initPalettizedTexture();
+		}
+
 		fixResourceData(device, reinterpret_cast<D3DDDIARG_CREATERESOURCE&>(m_fixedData));
 		m_formatInfo = getFormatInfo(m_fixedData.Format);
 
 		HRESULT result = createResourceFunc(device, reinterpret_cast<Arg*>(&m_fixedData));
+		if (FAILED(result) &&
+			D3DDDIFMT_P8 == m_fixedData.Format &&
+			D3DDDIPOOL_SYSTEMMEM == m_fixedData.Pool &&
+			m_fixedData.Flags.Texture)
+		{
+			// The driver may refuse 8-bit textures even in system memory; such surfaces are only ever
+			// read by the CPU (palettized texture emulation), so create them as plain surfaces.
+			m_fixedData.Flags.Texture = 0;
+			result = createResourceFunc(device, reinterpret_cast<Arg*>(&m_fixedData));
+		}
 		if (FAILED(result))
 		{
 			throw HResultException(result);
 		}
 		m_handle = m_fixedData.hResource;
+
+		if (m_palettized)
+		{
+			LOG_VERBOSE << "Palettized texture emulated: " << m_origData.pSurfList[0].Width << 'x'
+				<< m_origData.pSurfList[0].Height << ", " << m_origData.SurfCount << " level(s)";
+			for (UINT i = 0; i < m_palettized->levels.size(); ++i)
+			{
+				uploadPalettizedLevel(i);
+			}
+		}
 
 		if (D3DDDIPOOL_SYSTEMMEM == m_fixedData.Pool &&
 			0 != m_formatInfo.bytesPerPixel)
@@ -195,6 +227,15 @@ namespace D3dDdi
 		}
 
 		auto srcResource = m_device.getResource(data.hSrcResource);
+		if (m_palettized || (srcResource && srcResource->m_palettized))
+		{
+			if (srcResource && !srcResource->isValidRect(data.SrcSubResourceIndex, data.SrcRect))
+			{
+				return S_OK;
+			}
+			return palettizedBlt(data, srcResource);
+		}
+
 		if (srcResource)
 		{
 			if (!srcResource->isValidRect(data.SrcSubResourceIndex, data.SrcRect))
@@ -283,6 +324,16 @@ namespace D3dDdi
 		if (data.DstRect.left >= data.DstRect.right || data.DstRect.top >= data.DstRect.bottom)
 		{
 			return S_OK;
+		}
+
+		if (m_palettized)
+		{
+			auto& level = m_palettized->levels[data.SubResourceIndex];
+			DDraw::Blitter::colorFill(level.indices.data() + data.DstRect.top * level.pitch + data.DstRect.left,
+				level.pitch, data.DstRect.right - data.DstRect.left, data.DstRect.bottom - data.DstRect.top,
+				1, data.Color & 0xFF);
+			uploadPalettizedLevel(data.SubResourceIndex);
+			return LOG_RESULT(S_OK);
 		}
 
 		if (m_lockResource)
@@ -478,6 +529,23 @@ namespace D3dDdi
 
 	HRESULT Resource::lock(D3DDDIARG_LOCK& data)
 	{
+		if (m_palettized)
+		{
+			auto& level = m_palettized->levels[data.SubResourceIndex];
+			BYTE* ptr = level.indices.data();
+			if (data.Flags.AreaValid)
+			{
+				ptr += data.Area.top * level.pitch + data.Area.left;
+			}
+			data.pSurfData = ptr;
+			data.Pitch = level.pitch;
+			if (!data.Flags.ReadOnly)
+			{
+				level.isDirty = true;
+			}
+			return S_OK;
+		}
+
 		if (isOversized())
 		{
 			if (0 != data.SubResourceIndex ||
@@ -731,6 +799,15 @@ namespace D3dDdi
 
 	HRESULT Resource::unlock(const D3DDDIARG_UNLOCK& data)
 	{
+		if (m_palettized)
+		{
+			if (m_palettized->levels[data.SubResourceIndex].isDirty)
+			{
+				uploadPalettizedLevel(data.SubResourceIndex);
+			}
+			return S_OK;
+		}
+
 		if (isOversized())
 		{
 			if (0 != data.SubResourceIndex)
@@ -746,5 +823,266 @@ namespace D3dDdi
 		}
 
 		return m_device.getOrigVtable().pfnUnlock(m_device, &data);
+	}
+
+	DWORD Resource::getPalettizedColorKey(UINT index)
+	{
+		index &= 0xFF;
+		if (static_cast<int>(index) != m_palettized->colorKeyIndex)
+		{
+			m_palettized->colorKeyIndex = index;
+			for (UINT i = 0; i < m_palettized->levels.size(); ++i)
+			{
+				uploadPalettizedLevel(i);
+			}
+		}
+		const DWORD* palette = m_device.getPalette(m_palettized->paletteHandle);
+		return palette ? (palette[index] & 0xFFFFFF) : 0;
+	}
+
+	bool Resource::getIndexData(UINT subResourceIndex, BYTE*& data, UINT& pitch, UINT& width, UINT& height)
+	{
+		if (m_palettized)
+		{
+			if (subResourceIndex >= m_palettized->levels.size())
+			{
+				return false;
+			}
+			auto& level = m_palettized->levels[subResourceIndex];
+			data = level.indices.data();
+			pitch = level.pitch;
+			width = level.width;
+			height = level.height;
+			return true;
+		}
+
+		if (D3DDDIFMT_P8 != m_fixedData.Format || isOversized() ||
+			subResourceIndex >= m_lockData.size() || !m_lockData[subResourceIndex].data)
+		{
+			return false;
+		}
+
+		auto& lockData = m_lockData[subResourceIndex];
+		if (m_lockResource && !lockData.isSysMemUpToDate)
+		{
+			copyToSysMem(subResourceIndex);
+		}
+		data = static_cast<BYTE*>(lockData.data);
+		pitch = lockData.pitch;
+		width = m_fixedData.pSurfList[subResourceIndex].Width;
+		height = m_fixedData.pSurfList[subResourceIndex].Height;
+		return true;
+	}
+
+	UINT Resource::getPaletteHandle() const
+	{
+		return m_palettized ? m_palettized->paletteHandle : 0;
+	}
+
+	void Resource::initPalettizedTexture()
+	{
+		m_palettized = std::make_unique<PalettizedData>();
+		m_palettized->paletteHandle = 0;
+		m_palettized->colorKeyIndex = -1;
+		m_palettized->levels.resize(m_origData.SurfCount);
+
+		for (UINT i = 0; i < m_origData.SurfCount; ++i)
+		{
+			const auto& surface = m_origData.pSurfList[i];
+			auto& level = m_palettized->levels[i];
+			level.width = surface.Width;
+			level.height = surface.Height;
+			level.pitch = (surface.Width + 3) & ~3;
+			level.indices.assign(level.pitch * level.height, 0);
+			level.isDirty = false;
+
+			if (surface.pSysMem)
+			{
+				for (UINT y = 0; y < level.height; ++y)
+				{
+					memcpy(level.indices.data() + y * level.pitch,
+						static_cast<const BYTE*>(surface.pSysMem) + y * surface.SysMemPitch, level.width);
+				}
+			}
+
+			m_fixedData.surfaceData[i].pSysMem = nullptr;
+			m_fixedData.surfaceData[i].SysMemPitch = 0;
+		}
+
+		m_fixedData.Format = D3DDDIFMT_X8R8G8B8;
+	}
+
+	void Resource::onPaletteUpdated()
+	{
+		for (UINT i = 0; i < m_palettized->levels.size(); ++i)
+		{
+			uploadPalettizedLevel(i);
+		}
+	}
+
+	HRESULT Resource::palettizedBlt(const D3DDDIARG_BLT& data, Resource* srcResource)
+	{
+		BYTE* dst = nullptr;
+		UINT dstPitch = 0;
+		UINT dstWidth = 0;
+		UINT dstHeight = 0;
+		BYTE* src = nullptr;
+		UINT srcPitch = 0;
+		UINT srcWidth = 0;
+		UINT srcHeight = 0;
+
+		if (!srcResource ||
+			!getIndexData(data.DstSubResourceIndex, dst, dstPitch, dstWidth, dstHeight) ||
+			!srcResource->getIndexData(data.SrcSubResourceIndex, src, srcPitch, srcWidth, srcHeight))
+		{
+			LOG_ONCE("WARNING: Unsupported blt involving an emulated palettized texture");
+			return m_device.getOrigVtable().pfnBlt(m_device, &data);
+		}
+
+		DDraw::Blitter::blt(
+			dst + data.DstRect.top * dstPitch + data.DstRect.left,
+			dstPitch,
+			data.DstRect.right - data.DstRect.left,
+			data.DstRect.bottom - data.DstRect.top,
+			src + data.SrcRect.top * srcPitch + data.SrcRect.left,
+			srcPitch,
+			(1 - 2 * data.Flags.MirrorLeftRight) * (data.SrcRect.right - data.SrcRect.left),
+			(1 - 2 * data.Flags.MirrorUpDown) * (data.SrcRect.bottom - data.SrcRect.top),
+			1,
+			data.Flags.DstColorKey ? reinterpret_cast<const DWORD*>(&data.ColorKey) : nullptr,
+			data.Flags.SrcColorKey ? reinterpret_cast<const DWORD*>(&data.ColorKey) : nullptr);
+
+		if (m_palettized)
+		{
+			uploadPalettizedLevel(data.DstSubResourceIndex);
+		}
+		else if (m_lockResource)
+		{
+			m_lockData[data.DstSubResourceIndex].isVidMemUpToDate = false;
+		}
+		return S_OK;
+	}
+
+	HRESULT Resource::palettizedTexBlt(const POINT& dstPoint, HANDLE srcResourceHandle, const RECT& srcRect)
+	{
+		auto srcResource = m_device.getResource(srcResourceHandle);
+		BYTE* src = nullptr;
+		UINT srcPitch = 0;
+		UINT srcWidth = 0;
+		UINT srcHeight = 0;
+		if (!srcResource || !srcResource->getIndexData(0, src, srcPitch, srcWidth, srcHeight))
+		{
+			LOG_ONCE("WARNING: Unsupported texture load into an emulated palettized texture");
+			return E_FAIL;
+		}
+
+		// If the source has more mip levels than the destination, start from the source level
+		// that matches the destination's top level (as IDirect3DDevice7::Load does).
+		const UINT srcLevelCount = srcResource->m_palettized
+			? srcResource->m_palettized->levels.size() : srcResource->m_fixedData.SurfCount;
+		UINT srcLevelOffset = 0;
+		if (0 == srcRect.left && 0 == srcRect.top &&
+			static_cast<UINT>(srcRect.right) == srcWidth && static_cast<UINT>(srcRect.bottom) == srcHeight)
+		{
+			while (srcLevelOffset + 1 < srcLevelCount && srcWidth > m_palettized->levels[0].width)
+			{
+				++srcLevelOffset;
+				if (!srcResource->getIndexData(srcLevelOffset, src, srcPitch, srcWidth, srcHeight))
+				{
+					return E_FAIL;
+				}
+			}
+		}
+
+		for (UINT i = 0; i < m_palettized->levels.size() && i + srcLevelOffset < srcLevelCount; ++i)
+		{
+			if (!srcResource->getIndexData(i + srcLevelOffset, src, srcPitch, srcWidth, srcHeight))
+			{
+				break;
+			}
+
+			const UINT shift = i + srcLevelOffset;
+			RECT rect = { srcRect.left >> shift, srcRect.top >> shift, srcRect.right >> shift, srcRect.bottom >> shift };
+			rect.right = std::min<LONG>(std::max<LONG>(rect.right, rect.left + 1), static_cast<LONG>(srcWidth));
+			rect.bottom = std::min<LONG>(std::max<LONG>(rect.bottom, rect.top + 1), static_cast<LONG>(srcHeight));
+
+			auto& level = m_palettized->levels[i];
+			const LONG x = dstPoint.x >> i;
+			const LONG y = dstPoint.y >> i;
+			const LONG width = std::min<LONG>(rect.right - rect.left, static_cast<LONG>(level.width) - x);
+			const LONG height = std::min<LONG>(rect.bottom - rect.top, static_cast<LONG>(level.height) - y);
+			if (width <= 0 || height <= 0)
+			{
+				break;
+			}
+
+			for (LONG row = 0; row < height; ++row)
+			{
+				memcpy(level.indices.data() + (y + row) * level.pitch + x,
+					src + (rect.top + row) * srcPitch + rect.left, width);
+			}
+			uploadPalettizedLevel(i);
+		}
+		return S_OK;
+	}
+
+	void Resource::setPaletteHandle(UINT paletteHandle)
+	{
+		if (paletteHandle != m_palettized->paletteHandle)
+		{
+			m_palettized->paletteHandle = paletteHandle;
+			onPaletteUpdated();
+		}
+	}
+
+	void Resource::uploadPalettizedLevel(UINT subResourceIndex)
+	{
+		auto& level = m_palettized->levels[subResourceIndex];
+		level.isDirty = false;
+
+		DWORD palette[256] = {};
+		const DWORD* devicePalette = m_device.getPalette(m_palettized->paletteHandle);
+		if (devicePalette)
+		{
+			memcpy(palette, devicePalette, sizeof(palette));
+		}
+
+		// Keep the color key unique: other entries with the same color would become transparent too.
+		const int key = m_palettized->colorKeyIndex;
+		if (key >= 0)
+		{
+			for (int i = 0; i < 256; ++i)
+			{
+				if (i != key && palette[i] == palette[key])
+				{
+					palette[i] ^= 1;
+				}
+			}
+		}
+
+		D3DDDIARG_LOCK lock = {};
+		lock.hResource = m_handle;
+		lock.SubResourceIndex = subResourceIndex;
+		HRESULT result = m_device.getOrigVtable().pfnLock(m_device, &lock);
+		if (FAILED(result))
+		{
+			LOG_ONCE("ERROR: Failed to lock an emulated palettized texture: " << Compat::hex(result));
+			return;
+		}
+
+		for (UINT y = 0; y < level.height; ++y)
+		{
+			const BYTE* src = level.indices.data() + y * level.pitch;
+			DWORD* dst = reinterpret_cast<DWORD*>(static_cast<BYTE*>(lock.pSurfData) + y * lock.Pitch);
+			for (UINT x = 0; x < level.width; ++x)
+			{
+				dst[x] = palette[src[x]];
+			}
+		}
+
+		D3DDDIARG_UNLOCK unlock = {};
+		unlock.hResource = m_handle;
+		unlock.SubResourceIndex = subResourceIndex;
+		m_device.getOrigVtable().pfnUnlock(m_device, &unlock);
 	}
 }

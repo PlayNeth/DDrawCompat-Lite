@@ -1,0 +1,36 @@
+# Build check for work in progress: builds any push to a dev/* branch without publishing a release.
+name: Build check
+
+on:
+  push:
+    branches: ['dev/**']
+
+jobs:
+  build:
+    runs-on: windows-2022
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: microsoft/setup-msbuild@v2
+
+      - name: Install WDK 2004 (10.0.19041)
+        shell: pwsh
+        run: |
+          Invoke-WebRequest 'https://go.microsoft.com/fwlink/?linkid=2128854' -OutFile "$env:RUNNER_TEMP\wdksetup.exe"
+          $p = Start-Process "$env:RUNNER_TEMP\wdksetup.exe" -ArgumentList '/q', '/norestart', '/features', '+' -Wait -PassThru
+          if ($p.ExitCode -ne 0) { "::error::WDK setup failed with exit code $($p.ExitCode)"; exit 1 }
+
+      - name: Build
+        shell: pwsh
+        run: |
+          msbuild DDrawCompat.sln /m /nologo /v:minimal /p:Configuration=Release /p:Platform=x86 2>&1 | Tee-Object -FilePath build.log
+          $code = $LASTEXITCODE
+          Select-String -Path build.log -Pattern ': (fatal )?error ' | Select-Object -First 40 | ForEach-Object { "::error::" + $_.Line.Trim() }
+          Select-String -Path build.log -Pattern ': warning ' | Select-Object -First 20 | ForEach-Object { "::warning::" + $_.Line.Trim() }
+          exit $code
+
+      - uses: actions/upload-artifact@v4
+        if: success()
+        with:
+          name: ddraw-dev
+          path: Release/ddraw.dll

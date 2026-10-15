@@ -10,6 +10,7 @@
 #include <D3dDdi/KernelModeThunks.h>
 #include <DDraw/DirectDraw.h>
 #include <DDraw/DirectDrawSurface.h>
+#include <DDraw/FpsCounter.h>
 #include <DDraw/IReleaseNotifier.h>
 #include <DDraw/RealPrimarySurface.h>
 #include <DDraw/ScopedThreadLock.h>
@@ -182,19 +183,24 @@ namespace
 		bltToPrimaryChain(*src);
 		D3dDdi::KernelModeThunks::setDcPaletteOverride(false);
 
-		if (g_isFullScreen && src == DDraw::PrimarySurface::getGdiSurface())
+		if (g_isFullScreen)
 		{
 			auto backBuffer(getBackBuffer());
 			if (backBuffer)
 			{
-				POINT offset = { -monitorRect.left, -monitorRect.top };
-				Gdi::Window::presentLayered(*backBuffer, offset);
+				if (src == DDraw::PrimarySurface::getGdiSurface())
+				{
+					POINT offset = { -monitorRect.left, -monitorRect.top };
+					Gdi::Window::presentLayered(*backBuffer, offset);
+				}
+				DDraw::FpsCounter::draw(*backBuffer, g_surfaceDesc.dwHeight);
 			}
 		}
 	}
 
 	void updateNow(CompatWeakPtr<IDirectDrawSurface7> src, UINT flipInterval)
 	{
+		DDraw::FpsCounter::onPresent();
 		presentToPrimaryChain(src);
 		g_isUpdatePending = false;
 		g_waitingForPrimaryUnlock = false;
@@ -300,6 +306,7 @@ namespace DDraw
 
 	HRESULT RealPrimarySurface::flip(CompatPtr<IDirectDrawSurface7> surfaceTargetOverride, DWORD flags)
 	{
+		DDraw::FpsCounter::onFlip();
 		const DWORD flipInterval = getFlipInterval(flags);
 		if (0 == flipInterval)
 		{

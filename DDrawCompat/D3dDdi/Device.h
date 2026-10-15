@@ -1,7 +1,9 @@
 #pragma once
 
+#include <array>
 #include <map>
 #include <unordered_map>
+#include <vector>
 
 #include <d3d.h>
 #include <d3dnthal.h>
@@ -43,10 +45,17 @@ namespace D3dDdi
 		HRESULT pfnOpenResource(D3DDDIARG_OPENRESOURCE* data);
 		HRESULT pfnPresent(const D3DDDIARG_PRESENT* data);
 		HRESULT pfnPresent1(D3DDDIARG_PRESENT1* data);
+		HRESULT pfnSetPalette(const D3DDDIARG_SETPALETTE* data);
 		HRESULT pfnSetRenderTarget(const D3DDDIARG_SETRENDERTARGET* data);
 		HRESULT pfnSetStreamSource(const D3DDDIARG_SETSTREAMSOURCE* data);
 		HRESULT pfnSetStreamSourceUm(const D3DDDIARG_SETSTREAMSOURCEUM* data, const void* umBuffer);
+		HRESULT pfnTexBlt(const D3DDDIARG_TEXBLT* data);
+		HRESULT pfnTexBlt1(const D3DDDIARG_TEXBLT1* data);
 		HRESULT pfnUnlock(const D3DDDIARG_UNLOCK* data);
+		HRESULT pfnUpdatePalette(const D3DDDIARG_UPDATEPALETTE* data, const PALETTEENTRY* paletteData);
+
+		// Palettes as 0x00RRGGBB, for palettized texture emulation; nullptr if never set.
+		const DWORD* getPalette(UINT paletteHandle) const;
 
 		Adapter& getAdapter() const { return m_adapter; }
 		DrawPrimitive& getDrawPrimitive() { return m_drawPrimitive; }
@@ -85,6 +94,7 @@ namespace D3dDdi
 		DrawPrimitive m_drawPrimitive;
 		DeviceState m_state;
 		bool m_isSrcColorKeySupported;
+		std::vector<std::array<DWORD, 256>> m_palettes;
 
 		static std::map<HANDLE, Device> s_devices;
 		static bool s_isFlushEnabled;

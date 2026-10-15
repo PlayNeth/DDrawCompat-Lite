@@ -3,6 +3,7 @@
 
 #include <Common/CompatPtr.h>
 #include <Common/Hook.h>
+#include <Common/Log.h>
 #include <DDraw/DirectDraw.h>
 #include <DDraw/ScopedThreadLock.h>
 #include <Gdi/Gdi.h>
@@ -94,6 +95,21 @@ namespace
 			}
 
 			Gdi::VirtualScreen::update();
+
+			if (lpDevMode)
+			{
+				LOG_VERBOSE << "Display mode set: " << currDevMode.dmPelsWidth << 'x' << currDevMode.dmPelsHeight
+					<< ", " << g_currentBpp << "-bit (emulated on " << currDevMode.dmBitsPerPel << "-bit), "
+					<< currDevMode.dmDisplayFrequency << " Hz";
+			}
+			else
+			{
+				LOG_VERBOSE << "Display mode restored to the desktop mode";
+			}
+		}
+		else if (!(dwflags & CDS_TEST))
+		{
+			LOG_VERBOSE << "Display mode change failed: " << result;
 		}
 
 		return result;

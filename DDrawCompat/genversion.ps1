@@ -1,10 +1,9 @@
 Param ($VersionFile)
 
-Try {
-    $VersionString = git describe --tags --dirty --match v[0-9]*
-}
-Catch [System.Management.Automation.CommandNotFoundException] {
-    Write-Host 'warning: Git was not found in the system PATH. Version info will be missing from the DLL.'
+# ddrawcompat-lite: the version comes from the VERSION file in the repository root.
+$VersionFilePath = Join-Path $PSScriptRoot '..\VERSION'
+If (Test-Path $VersionFilePath) {
+    $VersionString = 'v' + (Get-Content $VersionFilePath -Raw).Trim()
 }
 
 If ( ($VersionString -is [String]) -and ($VersionString -match '^v[0-9]+\.[0-9]+\.[0-9]+(-.*)?$') ) {

@@ -1,7 +1,9 @@
+#include <string>
 #include <type_traits>
 
 #include <Common/CompatPtr.h>
 #include <Common/CompatVtable.h>
+#include <Common/Log.h>
 #include <Config/Config.h>
 #include <D3dDdi/KernelModeThunks.h>
 #include <DDraw/DirectDraw.h>
@@ -17,6 +19,35 @@ namespace
 		LOG_ONCE("COM instantiation of DirectDraw detected");
 	}
 
+	template <typename TSurfaceDesc>
+	void logSurfaceCreation(const TSurfaceDesc& desc, HRESULT result)
+	{
+		std::string kind;
+		const DWORD caps = desc.ddsCaps.dwCaps;
+		if (caps & DDSCAPS_PRIMARYSURFACE) { kind = "primary"; }
+		else if (caps & DDSCAPS_TEXTURE) { kind = "texture"; }
+		else if (caps & DDSCAPS_ZBUFFER) { kind = "z-buffer"; }
+		else if (caps & DDSCAPS_3DDEVICE) { kind = "render target"; }
+		else if (caps & DDSCAPS_OFFSCREENPLAIN) { kind = "off-screen"; }
+		else { kind = "surface"; }
+		if (caps & DDSCAPS_SYSTEMMEMORY) { kind += " (system memory)"; }
+		else if (caps & DDSCAPS_VIDEOMEMORY) { kind += " (video memory)"; }
+		if (caps & DDSCAPS_MIPMAP) { kind += ", mipmapped"; }
+
+		auto log = Compat::Log();
+		log << "CreateSurface: " << kind;
+		if (desc.dwFlags & DDSD_WIDTH) { log << ", " << desc.dwWidth << 'x' << desc.dwHeight; }
+		if (desc.dwFlags & DDSD_BACKBUFFERCOUNT) { log << ", " << desc.dwBackBufferCount << " back buffer(s)"; }
+		if (desc.dwFlags & DDSD_PIXELFORMAT)
+		{
+			const auto& pf = desc.ddpfPixelFormat;
+			if (pf.dwFlags & DDPF_PALETTEINDEXED8) { log << ", 8-bit palettized"; }
+			else if (pf.dwFlags & DDPF_FOURCC) { log << ", FourCC " << Compat::hex(pf.dwFourCC); }
+			else { log << ", " << pf.dwRGBBitCount << "-bit" << ((pf.dwFlags & DDPF_ALPHAPIXELS) ? " with alpha" : ""); }
+		}
+		log << ", result " << Compat::hex(result);
+	}
+
 	template <typename TDirectDraw, typename TSurfaceDesc, typename TSurface>
 	HRESULT STDMETHODCALLTYPE CreateSurface(
 		TDirectDraw* This, TSurfaceDesc* lpDDSurfaceDesc, TSurface** lplpDDSurface, IUnknown* pUnkOuter)
@@ -26,15 +57,43 @@ namespace
 			return getOrigVtable(This).CreateSurface(This, lpDDSurfaceDesc, lplpDDSurface, pUnkOuter);
 		}
 
+		HRESULT result = DD_OK;
 		if (lpDDSurfaceDesc->ddsCaps.dwCaps & DDSCAPS_PRIMARYSURFACE)
 		{
-			return DDraw::PrimarySurface::create<TDirectDraw>(*This, *lpDDSurfaceDesc, *lplpDDSurface);
+			result = DDraw::PrimarySurface::create<TDirectDraw>(*This, *lpDDSurfaceDesc, *lplpDDSurface);
 		}
 		else
 		{
-			return DDraw::Surface::create<TDirectDraw>(
+			result = DDraw::Surface::create<TDirectDraw>(
 				*This, *lpDDSurfaceDesc, *lplpDDSurface, std::make_unique<DDraw::Surface>(lpDDSurfaceDesc->ddsCaps.dwCaps));
 		}
+
+		if (Compat::Log::isVerbose())
+		{
+			logSurfaceCreation(*lpDDSurfaceDesc, result);
+		}
+		return result;
+	}
+
+	template <typename TDirectDraw>
+	HRESULT STDMETHODCALLTYPE SetCooperativeLevel(TDirectDraw* This, HWND hWnd, DWORD dwFlags)
+	{
+		HRESULT result = getOrigVtable(This).SetCooperativeLevel(This, hWnd, dwFlags);
+		LOG_VERBOSE << "SetCooperativeLevel: " << ((dwFlags & DDSCL_FULLSCREEN) ? "fullscreen" : "windowed")
+			<< ((dwFlags & DDSCL_EXCLUSIVE) ? ", exclusive" : "")
+			<< ((dwFlags & DDSCL_MULTITHREADED) ? ", multithreaded" : "")
+			<< ((dwFlags & DDSCL_FPUPRESERVE) ? ", FPU preserve" : "")
+			<< ", flags " << Compat::hex(dwFlags) << ", result " << Compat::hex(result);
+		return result;
+	}
+
+	template <typename TDirectDraw, typename... Params>
+	HRESULT STDMETHODCALLTYPE SetDisplayMode(TDirectDraw* This, DWORD dwWidth, DWORD dwHeight, DWORD dwBPP, Params... params)
+	{
+		HRESULT result = getOrigVtable(This).SetDisplayMode(This, dwWidth, dwHeight, dwBPP, params...);
+		LOG_VERBOSE << "SetDisplayMode: " << dwWidth << 'x' << dwHeight << ", " << dwBPP << "-bit"
+			<< ", result " << Compat::hex(result);
+		return result;
 	}
 
 	template <typename TDirectDraw>
@@ -153,6 +212,8 @@ namespace
 		vtable.GetCaps = &GetCaps;
 		vtable.GetGDISurface = &GetGDISurface;
 		vtable.Initialize = &Initialize;
+		vtable.SetCooperativeLevel = &SetCooperativeLevel;
+		vtable.SetDisplayMode = &SetDisplayMode;
 		vtable.WaitForVerticalBlank = &WaitForVerticalBlank;
 
 		if constexpr (!std::is_same_v<Vtable, IDirectDrawVtbl>)

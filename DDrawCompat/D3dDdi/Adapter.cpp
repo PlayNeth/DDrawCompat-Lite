@@ -1,4 +1,8 @@
+#include <algorithm>
+#include <vector>
+
 #include <Common/CompatVtable.h>
+#include <Config/Config.h>
 #include <D3dDdi/Adapter.h>
 #include <D3dDdi/AdapterFuncs.h>
 #include <D3dDdi/Device.h>
@@ -31,6 +35,7 @@ namespace D3dDdi
 		, m_runtimeVersion(data.Version)
 		, m_driverVersion(data.DriverVersion)
 		, m_d3dExtendedCaps{}
+		, m_isP8FormatMissing(-1)
 	{
 		if (m_adapter)
 		{
@@ -49,18 +54,8 @@ namespace D3dDdi
 
 	DWORD Adapter::getSupportedZBufferBitDepths()
 	{
-		UINT formatCount = 0;
-		D3DDDIARG_GETCAPS caps = {};
-		caps.Type = D3DDDICAPS_GETFORMATCOUNT;
-		caps.pData = &formatCount;
-		caps.DataSize = sizeof(formatCount);
-		m_origVtable.pfnGetCaps(m_adapter, &caps);
-
-		std::vector<FORMATOP> formatOp(formatCount);
-		caps.Type = D3DDDICAPS_GETFORMATDATA;
-		caps.pData = formatOp.data();
-		caps.DataSize = formatCount * sizeof(FORMATOP);
-		m_origVtable.pfnGetCaps(m_adapter, &caps);
+		const auto formatOp = getFormatOps();
+		const UINT formatCount = formatOp.size();
 
 		DWORD supportedZBufferBitDepths = 0;
 		for (UINT i = 0; i < formatCount; ++i)
@@ -107,12 +102,67 @@ namespace D3dDdi
 		return result;
 	}
 
+	std::vector<FORMATOP> Adapter::getFormatOps()
+	{
+		UINT formatCount = 0;
+		D3DDDIARG_GETCAPS caps = {};
+		caps.Type = D3DDDICAPS_GETFORMATCOUNT;
+		caps.pData = &formatCount;
+		caps.DataSize = sizeof(formatCount);
+		m_origVtable.pfnGetCaps(m_adapter, &caps);
+
+		std::vector<FORMATOP> formatOps(formatCount);
+		caps.Type = D3DDDICAPS_GETFORMATDATA;
+		caps.pData = formatOps.data();
+		caps.DataSize = formatCount * sizeof(FORMATOP);
+		m_origVtable.pfnGetCaps(m_adapter, &caps);
+		return formatOps;
+	}
+
+	bool Adapter::isP8FormatMissing()
+	{
+		if (m_isP8FormatMissing < 0)
+		{
+			const auto formatOps = getFormatOps();
+			m_isP8FormatMissing = std::none_of(formatOps.begin(), formatOps.end(),
+				[](const FORMATOP& op) { return D3DDDIFMT_P8 == op.Format; }) ? 1 : 0;
+		}
+		return 1 == m_isP8FormatMissing;
+	}
+
 	HRESULT Adapter::pfnGetCaps(const D3DDDIARG_GETCAPS* pData)
 	{
+		if (Config::palettizedTextures && D3DDDICAPS_GETFORMATDATA == pData->Type && isP8FormatMissing())
+		{
+			// The driver doesn't list 8-bit palettized surfaces at all: append an entry for emulated textures.
+			const UINT count = pData->DataSize / sizeof(FORMATOP);
+			if (0 == count)
+			{
+				return m_origVtable.pfnGetCaps(m_adapter, pData);
+			}
+
+			D3DDDIARG_GETCAPS caps = *pData;
+			caps.DataSize = (count - 1) * sizeof(FORMATOP);
+			HRESULT result = m_origVtable.pfnGetCaps(m_adapter, &caps);
+			if (SUCCEEDED(result))
+			{
+				FORMATOP& op = static_cast<FORMATOP*>(pData->pData)[count - 1];
+				op = {};
+				op.Format = D3DDDIFMT_P8;
+				op.Operations = FORMATOP_TEXTURE;
+			}
+			return result;
+		}
+
 		HRESULT result = m_origVtable.pfnGetCaps(m_adapter, pData);
 		if (FAILED(result))
 		{
 			return result;
+		}
+
+		if (Config::palettizedTextures && D3DDDICAPS_GETFORMATCOUNT == pData->Type && isP8FormatMissing())
+		{
+			++*static_cast<UINT*>(pData->pData);
 		}
 
 		switch (pData->Type)
@@ -122,9 +172,30 @@ namespace D3dDdi
 				DDRAW_FXCAPS_BLTMIRRORLEFTRIGHT | DDRAW_FXCAPS_BLTMIRRORUPDOWN;
 			break;
 
+		case D3DDDICAPS_GETFORMATDATA:
+			if (Config::palettizedTextures)
+			{
+				// Advertise 8-bit palettized textures; they are emulated with 32-bit ones (see Resource).
+				const UINT count = pData->DataSize / sizeof(FORMATOP);
+				auto formatOp = static_cast<FORMATOP*>(pData->pData);
+				for (UINT i = 0; i < count; ++i)
+				{
+					if (D3DDDIFMT_P8 == formatOp[i].Format)
+					{
+						formatOp[i].Operations |= FORMATOP_TEXTURE;
+						formatOp[i].Operations &= ~(FORMATOP_CUBETEXTURE | FORMATOP_VOLUMETEXTURE);
+					}
+				}
+			}
+			break;
+
 		case D3DDDICAPS_GETD3D3CAPS:
 		{
 			auto& caps = static_cast<D3DNTHAL_GLOBALDRIVERDATA*>(pData->pData)->hwCaps;
+			if (Config::palettizedTextures)
+			{
+				caps.dpcTriCaps.dwTextureCaps &= ~D3DPTEXTURECAPS_ALPHAPALETTE;
+			}
 			if (caps.dwFlags & D3DDD_DEVICEZBUFFERBITDEPTH)
 			{
 				const DWORD supportedZBufferBitDepths = getSupportedZBufferBitDepths();

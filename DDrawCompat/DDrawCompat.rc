@@ -2,9 +2,9 @@
 #include <version.h>
 
 #ifdef SPECIALBUILD
-#define VERSION_PRODUCT_NAME "DDrawCompat (" SPECIALBUILD ")"
+#define VERSION_PRODUCT_NAME "DDrawCompat-Lite (" SPECIALBUILD ")"
 #else
-#define VERSION_PRODUCT_NAME "DDrawCompat"
+#define VERSION_PRODUCT_NAME "DDrawCompat-Lite"
 #endif
 
 VS_VERSION_INFO   VERSIONINFO
@@ -21,7 +21,7 @@ FILESUBTYPE       VFT2_UNKNOWN
         BLOCK "04090000"
         {
             VALUE "CompanyName", ""
-            VALUE "FileDescription", "https://github.com/narzoul/DDrawCompat"
+            VALUE "FileDescription", "DDrawCompat-Lite, based on https://github.com/narzoul/DDrawCompat"
             VALUE "FileVersion", VERSION_STRING
             VALUE "InternalName", "ddraw.dll"
             VALUE "LegalCopyright", "BSD Zero Clause License"

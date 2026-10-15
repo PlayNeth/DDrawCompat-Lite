@@ -24,6 +24,9 @@
 #define LOG_RESULT(...) __VA_ARGS__
 #endif
 
+// Extra detail, written only with Logging = verbose.
+#define LOG_VERBOSE if (!Compat::Log::isVerbose()) {} else Compat::Log()
+
 #define LOG_ONCE(msg) \
 	{ \
 		static bool isAlreadyLogged = false; \
@@ -184,7 +187,9 @@ namespace Compat
 			return *this;
 		}
 
-		static void initLogging(std::filesystem::path processPath);
+		static void initLogging(std::filesystem::path processPath, bool verbose);
+		static bool isEnabled() { return s_isEnabled; }
+		static bool isVerbose() { return s_isVerbose; }
 		static bool isPointerDereferencingAllowed() { return s_isLeaveLog || 0 == s_outParamDepth; }
 
 	protected:
@@ -224,6 +229,8 @@ namespace Compat
 		static thread_local bool s_isLeaveLog;
 
 		static std::ofstream s_logFile;
+		static bool s_isEnabled;
+		static bool s_isVerbose;
 	};
 
 	class LogFunc

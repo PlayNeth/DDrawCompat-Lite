@@ -35,7 +35,32 @@ namespace D3dDdi
 		void setAsGdiResource(bool isGdiResource);
 		HRESULT unlock(const D3DDDIARG_UNLOCK& data);
 
+		// Palettized (P8) texture emulation: the driver gets an X8R8G8B8 texture, while the
+		// application sees and writes 8-bit indices kept in system memory.
+		bool isPalettizedTexture() const { return nullptr != m_palettized; }
+		UINT getPaletteHandle() const;
+		void setPaletteHandle(UINT paletteHandle);
+		void onPaletteUpdated();
+		DWORD getPalettizedColorKey(UINT index);
+		HRESULT palettizedTexBlt(const POINT& dstPoint, HANDLE srcResource, const RECT& srcRect);
+
 	private:
+		struct PalettizedLevel
+		{
+			std::vector<BYTE> indices;
+			UINT pitch;
+			UINT width;
+			UINT height;
+			bool isDirty;
+		};
+
+		struct PalettizedData
+		{
+			std::vector<PalettizedLevel> levels;
+			UINT paletteHandle;
+			int colorKeyIndex;
+		};
+
 		class Data : public D3DDDIARG_CREATERESOURCE2
 		{
 		public:
@@ -94,6 +119,11 @@ namespace D3dDdi
 
 		HRESULT sysMemPreferredBlt(const D3DDDIARG_BLT& data, Resource& srcResource);
 
+		bool getIndexData(UINT subResourceIndex, BYTE*& data, UINT& pitch, UINT& width, UINT& height);
+		void initPalettizedTexture();
+		HRESULT palettizedBlt(const D3DDDIARG_BLT& data, Resource* srcResource);
+		void uploadPalettizedLevel(UINT subResourceIndex);
+
 		Device& m_device;
 		HANDLE m_handle;
 		Data m_origData;
@@ -102,5 +132,6 @@ namespace D3dDdi
 		std::unique_ptr<void, void(*)(void*)> m_lockBuffer;
 		std::vector<LockData> m_lockData;
 		std::unique_ptr<void, ResourceDeleter> m_lockResource;
+		std::unique_ptr<PalettizedData> m_palettized;
 	};
 }
