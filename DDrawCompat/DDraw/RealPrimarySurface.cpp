@@ -84,6 +84,16 @@ namespace
 
 	UINT getFlipInterval(DWORD flags)
 	{
+		switch (Config::vSync)
+		{
+		case Config::VSync::OFF:
+			return 0;
+		case Config::VSync::ON:
+			return Config::vSyncInterval;
+		default:
+			break;
+		}
+
 		if (flags & DDFLIP_NOVSYNC)
 		{
 			return 0;
@@ -433,5 +443,48 @@ namespace DDraw
 
 		D3dDdi::KernelModeThunks::waitForVsyncCounter(g_flipEndVsyncCount);
 		return true;
+	}
+
+	void RealPrimarySurface::waitForFpsLimit()
+	{
+		if (Config::FpsLimiter::OFF == Config::fpsLimiter || 0 == Config::fpsLimit || 0 == Time::g_qpcFrequency)
+		{
+			return;
+		}
+
+		static long long g_qpcPrevWaitEnd = Time::queryPerformanceCounter() - Time::g_qpcFrequency;
+		long long qpcNow = Time::queryPerformanceCounter();
+		const long long qpcWaitEnd = g_qpcPrevWaitEnd + Time::g_qpcFrequency / Config::fpsLimit;
+		if (qpcNow - qpcWaitEnd >= 0)
+		{
+			// Already late (or first frame): restart the schedule from now instead of trying to catch up.
+			g_qpcPrevWaitEnd = qpcNow;
+			return;
+		}
+		g_qpcPrevWaitEnd = qpcWaitEnd;
+
+		const HANDLE thread = GetCurrentThread();
+		const int prevPriority = GetThreadPriority(thread);
+		SetThreadPriority(thread, THREAD_PRIORITY_TIME_CRITICAL);
+
+		// Coarse wait with 1 ms sleeps (timeBeginPeriod(1) is set in DllMain), keeping the
+		// delayed presentation going since the DirectDraw lock is held by the caller.
+		while (Time::qpcToMs(qpcWaitEnd - qpcNow) > 1)
+		{
+			Sleep(1);
+			flush();
+			qpcNow = Time::queryPerformanceCounter();
+		}
+
+		// Spin for the remainder for accurate frame pacing.
+		while (qpcWaitEnd - qpcNow > 0)
+		{
+			qpcNow = Time::queryPerformanceCounter();
+		}
+
+		if (THREAD_PRIORITY_ERROR_RETURN != prevPriority)
+		{
+			SetThreadPriority(thread, prevPriority);
+		}
 	}
 }

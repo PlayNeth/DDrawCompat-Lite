@@ -1,6 +1,7 @@
 #include <algorithm>
 
 #include <Common/Log.h>
+#include <Config/Config.h>
 #include <D3dDdi/DrawPrimitive.h>
 #include <D3dDdi/Device.h>
 #include <D3dDdi/Resource.h>
@@ -618,6 +619,11 @@ namespace D3dDdi
 		auto vertices = m_batched.vertices.data();
 		if (!m_isHwVertexProcessingUsed)
 		{
+			// Pre-transformed (XYZRHW) vertices: screen-space position comes first.
+			// Like later DDrawCompat versions, points and lines are not shifted.
+			const bool isPointOrLine = D3DPT_POINTLIST == m_batched.primitiveType ||
+				D3DPT_LINELIST == m_batched.primitiveType || D3DPT_LINESTRIP == m_batched.primitiveType;
+			const float pixelCenterOffset = isPointOrLine ? 0.0f : Config::alternatePixelCenter;
 			UINT offset = 0;
 			for (UINT i = 0; i < count; ++i)
 			{
@@ -625,6 +631,11 @@ namespace D3dDdi
 				if (0 == v->rhw || INFINITY == v->rhw)
 				{
 					v->rhw = 1;
+				}
+				if (0 != pixelCenterOffset)
+				{
+					v->sx += pixelCenterOffset;
+					v->sy += pixelCenterOffset;
 				}
 				offset += m_streamSource.stride;
 			}

@@ -9,6 +9,7 @@
 #include <Common/Log.h>
 #include <Common/Path.h>
 #include <Common/Time.h>
+#include <Config/Config.h>
 #include <D3dDdi/Hooks.h>
 #include <DDraw/DirectDraw.h>
 #include <DDraw/Hooks.h>
@@ -180,6 +181,7 @@ BOOL WINAPI DllMain(HINSTANCE hinstDLL, DWORD fdwReason, LPVOID lpvReserved)
 		printEnvironmentVariable("__COMPAT_LAYER");
 		auto currentDllPath(Compat::getModulePath(hinstDLL));
 		Compat::Log() << "Loading DDrawCompat " << (lpvReserved ? "statically" : "dynamically") << " from " << currentDllPath.u8string();
+		Config::load(currentDllPath, processPath);
 
 		auto systemPath(Compat::getSystemPath());
 		if (Compat::isEqual(currentDllPath.parent_path(), systemPath))
@@ -220,6 +222,7 @@ BOOL WINAPI DllMain(HINSTANCE hinstDLL, DWORD fdwReason, LPVOID lpvReserved)
 		SetThemeAppProperties(0);
 
 		Win32::MemoryManagement::installHooks();
+		Win32::Registry::installEarlyHooks();
 		Win32::MsgHooks::installHooks();
 		Time::init();
 		Compat::closeDbgEng();

@@ -2,6 +2,7 @@
 
 #include <Common/CompatPtr.h>
 #include <Common/CompatVtable.h>
+#include <Config/Config.h>
 #include <D3dDdi/KernelModeThunks.h>
 #include <DDraw/DirectDraw.h>
 #include <DDraw/RealPrimarySurface.h>
@@ -60,6 +61,49 @@ namespace
 		return DD_OK;
 	}
 
+	void overrideVidMem(DWORD& total, DWORD& free)
+	{
+		const DWORD size = Config::videoMemory * 1024 * 1024;
+		total = size;
+		if (free > size)
+		{
+			free = size;
+		}
+	}
+
+	template <typename TDirectDraw, typename TDdsCaps>
+	HRESULT STDMETHODCALLTYPE GetAvailableVidMem(TDirectDraw* This, TDdsCaps* lpDDSCaps, LPDWORD lpdwTotal, LPDWORD lpdwFree)
+	{
+		HRESULT result = getOrigVtable(This).GetAvailableVidMem(This, lpDDSCaps, lpdwTotal, lpdwFree);
+		if (SUCCEEDED(result) && 0 != Config::videoMemory)
+		{
+			DWORD total = lpdwTotal ? *lpdwTotal : 0;
+			DWORD free = lpdwFree ? *lpdwFree : 0;
+			overrideVidMem(total, free);
+			if (lpdwTotal)
+			{
+				*lpdwTotal = total;
+			}
+			if (lpdwFree)
+			{
+				*lpdwFree = free;
+			}
+		}
+		return result;
+	}
+
+	template <typename TDirectDraw>
+	HRESULT STDMETHODCALLTYPE GetCaps(TDirectDraw* This, LPDDCAPS lpDDDriverCaps, LPDDCAPS lpDDHELCaps)
+	{
+		HRESULT result = getOrigVtable(This).GetCaps(This, lpDDDriverCaps, lpDDHELCaps);
+		if (SUCCEEDED(result) && 0 != Config::videoMemory && lpDDDriverCaps)
+		{
+			// dwVidMemTotal/dwVidMemFree are at the same offset in every DDCAPS version.
+			overrideVidMem(lpDDDriverCaps->dwVidMemTotal, lpDDDriverCaps->dwVidMemFree);
+		}
+		return result;
+	}
+
 	template <typename TDirectDraw>
 	HRESULT STDMETHODCALLTYPE Initialize(TDirectDraw* This, GUID* lpGUID)
 	{
@@ -106,9 +150,15 @@ namespace
 	{
 		vtable.CreateSurface = &CreateSurface;
 		vtable.FlipToGDISurface = &FlipToGDISurface;
+		vtable.GetCaps = &GetCaps;
 		vtable.GetGDISurface = &GetGDISurface;
 		vtable.Initialize = &Initialize;
 		vtable.WaitForVerticalBlank = &WaitForVerticalBlank;
+
+		if constexpr (!std::is_same_v<Vtable, IDirectDrawVtbl>)
+		{
+			vtable.GetAvailableVidMem = &GetAvailableVidMem;
+		}
 
 		if constexpr (std::is_same_v<Vtable, IDirectDraw4Vtbl> || std::is_same_v<Vtable, IDirectDraw7Vtbl>)
 		{
