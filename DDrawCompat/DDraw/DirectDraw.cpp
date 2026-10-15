@@ -26,6 +26,11 @@ namespace
 	template <typename TSurfaceDesc>
 	void logSurfaceCreation(const TSurfaceDesc& desc, HRESULT result)
 	{
+		if ((desc.dwFlags & DDSD_WIDTH) && !(desc.dwFlags & DDSD_HEIGHT))
+		{
+			return; // execute/vertex buffers (also created internally while installing hooks), not surfaces
+		}
+
 		std::string kind;
 		const DWORD caps = desc.ddsCaps.dwCaps;
 		if (caps & DDSCAPS_PRIMARYSURFACE) { kind = "primary"; }

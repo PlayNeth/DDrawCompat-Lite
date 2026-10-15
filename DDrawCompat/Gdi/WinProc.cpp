@@ -6,6 +6,7 @@
 #include <Common/Hook.h>
 #include <Common/Log.h>
 #include <Common/ScopedSrwLock.h>
+#include <DDraw/RealPrimarySurface.h>
 #include <Dll/Dll.h>
 #include <Gdi/CompatDc.h>
 #include <Gdi/Dc.h>
@@ -171,6 +172,33 @@ namespace
 		}
 	}
 
+	void CALLBACK menuWindowEvent(
+		HWINEVENTHOOK /*hWinEventHook*/,
+		DWORD event,
+		HWND hwnd,
+		LONG idObject,
+		LONG /*idChild*/,
+		DWORD /*dwEventThread*/,
+		DWORD /*dwmsEventTime*/)
+	{
+		if (OBJID_WINDOW != idObject || !hwnd || Gdi::MENU_ATOM != GetClassLong(hwnd, GCW_ATOM))
+		{
+			return;
+		}
+
+		if (EVENT_OBJECT_SHOW == event)
+		{
+			auto exStyle = CALL_ORIG_FUNC(GetWindowLongA)(hwnd, GWL_EXSTYLE);
+			if (exStyle & WS_EX_LAYERED)
+			{
+				CALL_ORIG_FUNC(SetWindowLongA)(hwnd, GWL_EXSTYLE, exStyle & ~WS_EX_LAYERED);
+			}
+		}
+
+		Gdi::Window::updateAll();
+		DDraw::RealPrimarySurface::scheduleUpdate();
+	}
+
 	void CALLBACK objectStateChangeEvent(
 		HWINEVENTHOOK /*hWinEventHook*/,
 		DWORD /*event*/,
@@ -218,6 +246,14 @@ namespace
 	void onCreateWindow(HWND hwnd)
 	{
 		LOG_FUNC("onCreateWindow", hwnd);
+
+		if (Gdi::MENU_ATOM == GetClassLong(hwnd, GCW_ATOM))
+		{
+			// Popup menus are not subclassed: their window procedure lives in the kernel, and modeless menus
+			// (MNS_MODELESS, used by JJ2+) stop responding to the mouse when their messages are passed
+			// through a user-mode subclass. Menu changes are tracked with window events instead.
+			return;
+		}
 
 		{
 			Compat::ScopedSrwLockExclusive lock(g_windowProcSrwLock);
@@ -439,6 +475,10 @@ namespace Gdi
 				Dll::g_currentModule, &objectCreateEvent, GetCurrentProcessId(), 0, WINEVENT_INCONTEXT);
 			SetWinEventHook(EVENT_OBJECT_STATECHANGE, EVENT_OBJECT_STATECHANGE,
 				Dll::g_currentModule, &objectStateChangeEvent, GetCurrentProcessId(), 0, WINEVENT_INCONTEXT);
+			SetWinEventHook(EVENT_OBJECT_SHOW, EVENT_OBJECT_HIDE,
+				Dll::g_currentModule, &menuWindowEvent, GetCurrentProcessId(), 0, WINEVENT_INCONTEXT);
+			SetWinEventHook(EVENT_OBJECT_LOCATIONCHANGE, EVENT_OBJECT_LOCATIONCHANGE,
+				Dll::g_currentModule, &menuWindowEvent, GetCurrentProcessId(), 0, WINEVENT_INCONTEXT);
 		}
 
 		void onCreateWindow(HWND hwnd)
