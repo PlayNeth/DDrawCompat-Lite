@@ -13,7 +13,6 @@
 
 namespace Compat
 {
-	void closeDbgEng();
 	std::string funcPtrToStr(void* funcPtr);
 	HMODULE getModuleHandleFromAddress(void* address);
 

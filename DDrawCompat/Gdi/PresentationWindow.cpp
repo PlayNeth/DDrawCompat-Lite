@@ -129,8 +129,6 @@ namespace
 			EnumWindows(initTopLevelWindow, 0);
 		}
 
-		Compat::closeDbgEng();
-
 		MSG msg = {};
 		while (GetMessage(&msg, nullptr, 0, 0))
 		{
