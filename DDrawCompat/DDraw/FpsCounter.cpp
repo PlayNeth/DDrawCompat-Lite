@@ -191,10 +191,10 @@ namespace DDraw
 			if (!g_textSurface || g_isTextSurfaceDirty)
 			{
 				HDC measureDc = CreateCompatibleDC(nullptr);
-				auto prevFont = SelectObject(measureDc, getFont(height));
+				auto prevMeasureFont = SelectObject(measureDc, getFont(height));
 				SIZE textSize = {};
 				GetTextExtentPoint32A(measureDc, g_text, length, &textSize);
-				SelectObject(measureDc, prevFont);
+				SelectObject(measureDc, prevMeasureFont);
 				DeleteDC(measureDc);
 
 				// Round the width up so small changes in the text don't recreate the surface every update.
