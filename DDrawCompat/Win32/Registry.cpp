@@ -1,8 +1,11 @@
+#include <algorithm>
 #include <cassert>
 #include <cstring>
 #include <map>
 #include <set>
 #include <sstream>
+#include <string>
+#include <vector>
 
 #include <Common/Hook.h>
 #include <Common/Log.h>
@@ -44,6 +47,7 @@ namespace
 
 	std::map<RegistryKey, DWORD> g_dwordValues;
 	std::set<RegistryKey> g_unsetValues;
+	std::vector<std::string> g_unsetValueNames;
 
 	std::wstring getKeyName(HKEY key)
 	{
@@ -186,27 +190,29 @@ namespace
 
 		if (hKey && lpValueName)
 		{
-			if (0 != Config::cpuSpeed)
+			// Cheap value name checks first: looking up the key name is a kernel call plus string work,
+			// and this hook sees every registry read in the process.
+			if (0 != Config::cpuSpeed && 0 == lstrcmpiA(lpValueName, "~MHz") && isCpuSpeedValue(hKey, L"~MHz"))
 			{
-				std::wostringstream valueNameW;
-				valueNameW << lpValueName;
-				if (isCpuSpeedValue(hKey, valueNameW.str()))
-				{
-					return LOG_RESULT(returnDword(Config::cpuSpeed, lpType, lpData, lpcbData));
-				}
+				return LOG_RESULT(returnDword(Config::cpuSpeed, lpType, lpData, lpcbData));
 			}
 
-			const std::wstring keyName = getKeyName(hKey);
-			const std::wstring localMachinePrefix = L"\\REGISTRY\\MACHINE\\";
-			if (localMachinePrefix == keyName.substr(0, localMachinePrefix.size()))
+			const bool isNameMatching = std::any_of(g_unsetValueNames.begin(), g_unsetValueNames.end(),
+				[&](const std::string& name) { return 0 == lstrcmpiA(name.c_str(), lpValueName); });
+			if (isNameMatching)
 			{
 				std::wostringstream oss;
 				oss << lpValueName;
-				auto it = g_unsetValues.find(RegistryKey(HKEY_LOCAL_MACHINE,
-					keyName.substr(localMachinePrefix.size()), oss.str()));
-				if (it != g_unsetValues.end())
+				const std::wstring valueName = oss.str();
 				{
-					return LOG_RESULT(ERROR_FILE_NOT_FOUND);
+					const std::wstring keyName = getKeyName(hKey);
+					const std::wstring localMachinePrefix = L"\\REGISTRY\\MACHINE\\";
+					if (localMachinePrefix == keyName.substr(0, localMachinePrefix.size()) &&
+						g_unsetValues.end() != g_unsetValues.find(RegistryKey(HKEY_LOCAL_MACHINE,
+							keyName.substr(localMachinePrefix.size()), valueName)))
+					{
+						return LOG_RESULT(ERROR_FILE_NOT_FOUND);
+					}
 				}
 			}
 		}
@@ -219,7 +225,7 @@ namespace
 	{
 		LOG_FUNC("regQueryValueExW", hKey, lpValueName, lpReserved, lpType, static_cast<void*>(lpData), lpcbData);
 
-		if (hKey && lpValueName && isCpuSpeedValue(hKey, lpValueName))
+		if (hKey && lpValueName && 0 == lstrcmpiW(lpValueName, L"~MHz") && isCpuSpeedValue(hKey, lpValueName))
 		{
 			return LOG_RESULT(returnDword(Config::cpuSpeed, lpType, lpData, lpcbData));
 		}
@@ -281,6 +287,7 @@ namespace Win32
 			std::wostringstream valueNameW;
 			valueNameW << valueName;
 			g_unsetValues.insert(RegistryKey(key, subKeyW.str(), valueNameW.str()));
+			g_unsetValueNames.push_back(valueName);
 		}
 	}
 }
