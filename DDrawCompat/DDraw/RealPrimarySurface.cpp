@@ -210,8 +210,15 @@ namespace
 	void updateGdiWindowRects(CompatWeakPtr<IDirectDrawSurface7> src, const RECT& monitorRect)
 	{
 		std::vector<RECT> rects;
-		if (Config::dialogColors && g_isFullScreen && 8 == g_surfaceDesc.ddpfPixelFormat.dwRGBBitCount &&
-			src == DDraw::PrimarySurface::getGdiSurface())
+		const bool isDialogColorsActive =
+			Config::dialogColors && g_isFullScreen && 8 == g_surfaceDesc.ddpfPixelFormat.dwRGBBitCount;
+
+		// Windows drawn with the default palette selected (most dialogs) are normally limited to the
+		// 20 static colors. Since they are presented with the system palette, which holds the game's
+		// colors in the other entries, let them use all of it (icons and bitmaps keep their colors).
+		Gdi::VirtualScreen::setDefaultPaletteFull(isDialogColorsActive);
+
+		if (isDialogColorsActive && src == DDraw::PrimarySurface::getGdiSurface())
 		{
 			GdiWindowEnumData data = { GetCurrentProcessId(), DDraw::PrimarySurface::getDeviceWindow() };
 			EnumWindows(addGdiWindowRegion, reinterpret_cast<LPARAM>(&data));

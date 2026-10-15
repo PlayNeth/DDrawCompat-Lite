@@ -22,6 +22,7 @@ namespace Gdi
 
 		void init();
 		bool update();
+		void setDefaultPaletteFull(bool isFull);
 		void updatePalette(PALETTEENTRY(&palette)[256]);
 	}
 }
