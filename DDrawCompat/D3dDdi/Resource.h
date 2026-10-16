@@ -90,6 +90,7 @@ namespace D3dDdi
 			long long qpcLastForcedLock;
 			bool isSysMemUpToDate;
 			bool isVidMemUpToDate;
+			bool hasPendingKeyedWrites;
 		};
 
 		class ResourceDeleter
@@ -108,7 +109,9 @@ namespace D3dDdi
 		HRESULT bltLock(D3DDDIARG_LOCK& data);
 		HRESULT bltUnlock(const D3DDDIARG_UNLOCK& data);
 		void clipRect(UINT subResourceIndex, RECT& rect);
-		HRESULT copySubResource(HANDLE dstResource, HANDLE srcResource, UINT subResourceIndex);
+		HRESULT copySubResource(HANDLE dstResource, HANDLE srcResource, UINT subResourceIndex,
+			const DWORD* srcColorKey = nullptr);
+		bool getWriteOnlyLockKey(DWORD& key) const;
 		void copyToSysMem(UINT subResourceIndex);
 		void copyToVidMem(UINT subResourceIndex);
 		void createGdiLockResource();

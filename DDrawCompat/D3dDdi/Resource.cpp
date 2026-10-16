@@ -332,6 +332,21 @@ namespace D3dDdi
 				++Stats::g_discardedReadbacks;
 				lockData.isSysMemUpToDate = true;
 			}
+			else if (lockData.hasPendingKeyedWrites && data.Flags.WriteOnly && !data.Flags.ReadOnly)
+			{
+				// Another write-only lock before the pending writes were uploaded: keep collecting them.
+			}
+			else if (DWORD key = 0; !lockData.hasPendingKeyedWrites &&
+				data.Flags.WriteOnly && !data.Flags.ReadOnly && getWriteOnlyLockKey(key))
+			{
+				// The game only writes, so instead of reading the surface back from video memory, fill the
+				// system memory copy with an unlikely color. Before the next GPU use, it is uploaded with that
+				// color as the source color key, so only the pixels the game wrote replace the video memory.
+				DDraw::Blitter::colorFill(lockData.data, lockData.pitch, surface.Width, surface.Height,
+					m_formatInfo.bytesPerPixel, key);
+				lockData.hasPendingKeyedWrites = true;
+				++Stats::g_keyedWriteLocks;
+			}
 			else
 			{
 				copyToSysMem(data.SubResourceIndex);
@@ -409,7 +424,8 @@ namespace D3dDdi
 		return LOG_RESULT(m_device.getOrigVtable().pfnColorFill(m_device, &data));
 	}
 
-	HRESULT Resource::copySubResource(HANDLE dstResource, HANDLE srcResource, UINT subResourceIndex)
+	HRESULT Resource::copySubResource(HANDLE dstResource, HANDLE srcResource, UINT subResourceIndex,
+		const DWORD* srcColorKey)
 	{
 		LOG_FUNC("Resource::copySubResource", dstResource, srcResource, subResourceIndex);
 		RECT rect = {};
@@ -423,6 +439,11 @@ namespace D3dDdi
 		data.hDstResource = dstResource;
 		data.DstSubResourceIndex = subResourceIndex;
 		data.DstRect = rect;
+		if (srcColorKey)
+		{
+			data.Flags.SrcColorKey = 1;
+			data.ColorKey = *srcColorKey;
+		}
 
 		const long long qpcStart = Time::queryPerformanceCounter();
 		HRESULT result = m_device.getOrigVtable().pfnBlt(m_device, &data);
@@ -458,12 +479,27 @@ namespace D3dDdi
 
 	void Resource::copyToSysMem(UINT subResourceIndex)
 	{
+		if (m_lockData[subResourceIndex].hasPendingKeyedWrites)
+		{
+			copyToVidMem(subResourceIndex);
+		}
 		copySubResource(m_lockResource.get(), m_handle, subResourceIndex);
 		m_lockData[subResourceIndex].isSysMemUpToDate = true;
 	}
 
 	void Resource::copyToVidMem(UINT subResourceIndex)
 	{
+		auto& lockData = m_lockData[subResourceIndex];
+		if (lockData.hasPendingKeyedWrites)
+		{
+			// Only the pixels written during write-only locks; the rest still holds the key color.
+			DWORD key = 0;
+			getWriteOnlyLockKey(key);
+			copySubResource(m_handle, m_lockResource.get(), subResourceIndex, &key);
+			lockData.hasPendingKeyedWrites = false;
+			lockData.isVidMemUpToDate = true;
+			return;
+		}
 		copySubResource(m_handle, m_lockResource.get(), subResourceIndex);
 		m_lockData[subResourceIndex].isVidMemUpToDate = true;
 	}
@@ -725,7 +761,8 @@ namespace D3dDdi
 		}
 
 		if (srcResource.m_lockResource &&
-			srcResource.m_lockData[data.SrcSubResourceIndex].isSysMemUpToDate)
+			(srcResource.m_lockData[data.SrcSubResourceIndex].isSysMemUpToDate ||
+				srcResource.m_lockData[data.SrcSubResourceIndex].hasPendingKeyedWrites))
 		{
 			srcResource.copyToVidMem(data.SrcSubResourceIndex);
 		}
@@ -806,6 +843,22 @@ namespace D3dDdi
 		}
 
 		return LOG_RESULT(S_OK);
+	}
+
+	bool Resource::getWriteOnlyLockKey(DWORD& key) const
+	{
+		// Only for surfaces with their own system memory copy (not the GDI screen) and plain RGB formats.
+		if (!m_lockBuffer || !m_device.isSrcColorKeySupported())
+		{
+			return false;
+		}
+		switch (m_fixedData.Format)
+		{
+		case D3DDDIFMT_X8R8G8B8: key = 0x00F10DE3; return true;
+		case D3DDDIFMT_R5G6B5: key = 0xF06B; return true;
+		case D3DDDIFMT_X1R5G5B5: key = 0x7835; return true;
+		default: return false;
+		}
 	}
 
 	Stats::Entry& Resource::getStats()
