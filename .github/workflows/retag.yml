@@ -1,0 +1,22 @@
+name: One-time retag
+
+on:
+  push:
+    branches: [lite]
+    paths: ['.github/workflows/retag.yml']
+
+permissions:
+  contents: write
+
+jobs:
+  retag:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Point release tags at the rewritten commits
+        run: |
+          git push -f origin 310015d89e80eb79c2883bd6b0e560ff73f8e0cd:refs/tags/v1.0.2
+          git push -f origin 99ea550c37c4014f58c2dbaec7bd82852203fa51:refs/tags/v1.1.0
+          git push -f origin 6871d4996543de847b732afbf730bdc1d5975751:refs/tags/v1.2.0
