@@ -14,6 +14,7 @@
 #include <D3dDdi/Resource.h>
 #include <D3dDdi/Stats.h>
 #include <DDraw/Blitter.h>
+#include <DDraw/RealPrimarySurface.h>
 #include <Gdi/Palette.h>
 #include <Gdi/VirtualScreen.h>
 
@@ -847,8 +848,12 @@ namespace D3dDdi
 
 	bool Resource::getWriteOnlyLockKey(DWORD& key) const
 	{
-		// Only for surfaces with their own system memory copy (not the GDI screen) and plain RGB formats.
-		if (!m_lockBuffer || !m_device.isSrcColorKeySupported())
+		// Only for plain RGB formats, and for surfaces with their own system memory copy. The GDI surface's
+		// copy is the virtual screen; in fullscreen modes all GDI access to it first uploads the pending
+		// writes and reads it back, and it is not presented directly, so it can be used there too.
+		// (Flipping games lock it as their back buffer every other frame.)
+		if (!m_device.isSrcColorKeySupported() ||
+			!m_lockBuffer && !(this == Device::getGdiResource() && DDraw::RealPrimarySurface::isFullScreen()))
 		{
 			return false;
 		}
