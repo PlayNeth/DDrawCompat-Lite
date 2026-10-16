@@ -39,6 +39,7 @@ namespace D3dDdi
 		inline unsigned long long g_smallLockFullBytes = 0;
 		inline unsigned long long g_surfaceDcs = 0;
 		inline unsigned long long g_discardedReadbacks = 0;
+		inline unsigned long long g_keyedWriteLocks = 0;
 		inline Transfer g_readbacks = {};
 		inline Transfer g_uploads = {};
 		inline std::map<std::string, Entry> g_entries;
@@ -62,10 +63,10 @@ namespace D3dDdi
 		{
 			char text[400] = {};
 			sprintf_s(text, "Surface sync: %llu CPU locks, %llu GetDC calls; %llu readbacks (%.1f MB, %.1f ms), "
-				"%llu uploads (%.1f MB, %.1f ms), %llu readbacks skipped (discard locks)",
+				"%llu uploads (%.1f MB, %.1f ms); readbacks skipped: %llu discard locks, %llu write-only locks",
 				g_locks, g_surfaceDcs,
 				g_readbacks.count, toMb(g_readbacks.bytes), toMs(g_readbacks.qpcTime),
-				g_uploads.count, toMb(g_uploads.bytes), toMs(g_uploads.qpcTime), g_discardedReadbacks);
+				g_uploads.count, toMb(g_uploads.bytes), toMs(g_uploads.qpcTime), g_discardedReadbacks, g_keyedWriteLocks);
 			Compat::Log() << text;
 
 			if (0 != g_smallLocks)
