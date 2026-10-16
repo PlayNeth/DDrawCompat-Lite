@@ -19,6 +19,15 @@ namespace
 	}
 }
 
+namespace
+{
+	// Devices are created several times at startup; log each buffer type and pool result only once.
+	bool g_isLogged[16] = {};
+
+#define LOG_VERBOSE_ONCE(msg, slot) \
+	if (!Compat::Log::isVerbose() || g_isLogged[(slot) & 15]) {} else { g_isLogged[(slot) & 15] = true; Compat::Log() << msg; }
+}
+
 namespace D3dDdi
 {
 	DynamicBuffer::DynamicBuffer(Device& device, UINT size, D3DDDIFORMAT format, D3DDDI_RESOURCEFLAGS resourceFlag)
@@ -98,6 +107,7 @@ namespace D3dDdi
 		// Some drivers (e.g. Intel) reject dynamic buffers in the default video memory pool, so the
 		// AGP/system-visible (non-local) and local pools are tried too before giving up.
 		const D3DDDI_POOL pools[] = { D3DDDIPOOL_VIDEOMEMORY, D3DDDIPOOL_NONLOCALVIDMEM, D3DDDIPOOL_LOCALVIDMEM };
+		const char* name = m_resourceFlag.IndexBuffer ? "Dynamic index buffer" : "Dynamic vertex buffer";
 		for (auto pool : pools)
 		{
 			D3DDDIARG_CREATERESOURCE2 cr = {};
@@ -115,12 +125,12 @@ namespace D3dDdi
 			{
 				m_resource.reset(cr.hResource);
 				m_size = size;
-				LOG_VERBOSE << (m_resourceFlag.IndexBuffer ? "Dynamic index buffer" : "Dynamic vertex buffer")
-					<< " created in pool " << static_cast<int>(pool) << ", " << size << " bytes";
+				LOG_VERBOSE_ONCE(name << " created in pool " << static_cast<int>(pool) << ", " << size << " bytes",
+					m_resourceFlag.IndexBuffer);
 				return;
 			}
-			LOG_VERBOSE << (m_resourceFlag.IndexBuffer ? "Dynamic index buffer" : "Dynamic vertex buffer")
-				<< " creation failed in pool " << static_cast<int>(pool) << ": " << Compat::hex(result);
+			LOG_VERBOSE_ONCE(name << " creation failed in pool " << static_cast<int>(pool) << ": " << Compat::hex(result),
+				m_resourceFlag.IndexBuffer + 2 * pool);
 		}
 	}
 

@@ -852,7 +852,7 @@ namespace D3dDdi
 		// copy is the virtual screen; in fullscreen modes all GDI access to it first uploads the pending
 		// writes and reads it back, and it is not presented directly, so it can be used there too.
 		// (Flipping games lock it as their back buffer every other frame.)
-		if (!m_device.isSrcColorKeySupported() ||
+		if (!Config::fastWriteOnlyLocks || !m_device.isSrcColorKeySupported() ||
 			!m_lockBuffer && !(this == Device::getGdiResource() && DDraw::RealPrimarySurface::isFullScreen()))
 		{
 			return false;
