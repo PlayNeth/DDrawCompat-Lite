@@ -19,6 +19,7 @@ namespace Config
 	bool fpsCounter = false;
 	bool palettizedTextures = false;
 	bool dialogColors = true;
+	bool fastWriteOnlyLocks = true;
 	unsigned cpuAffinity = 1;
 
 	// Defaults for the reported hardware: what a DirectX 7 era game expects to see, and small enough
@@ -182,6 +183,11 @@ namespace
 			return parseOnOff(value, Config::palettizedTextures);
 		}
 
+		if ("fastwriteonlylocks" == key)
+		{
+			return parseOnOff(value, Config::fastWriteOnlyLocks);
+		}
+
 		if ("dialogcolors" == key)
 		{
 			return parseOnOff(value, Config::dialogColors);
@@ -331,6 +337,7 @@ namespace Config
 		Compat::Log() << "Config: FpsCounter = " << (fpsCounter ? "on" : "off");
 		Compat::Log() << "Config: PalettizedTextures = " << (palettizedTextures ? "on" : "off");
 		Compat::Log() << "Config: DialogColors = " << (dialogColors ? "on" : "off");
+		Compat::Log() << "Config: FastWriteOnlyLocks = " << (fastWriteOnlyLocks ? "on" : "off");
 		Compat::Log() << "Config: CpuAffinity = " << (0 == cpuAffinity ? std::string("app")
 			: 0xFFFFFFFF == cpuAffinity ? std::string("all") : "mask " + std::to_string(cpuAffinity));
 		Compat::Log() << "Config: CpuSpeed = " << overrideStr(cpuSpeed, "MHz");

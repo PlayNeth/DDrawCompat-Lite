@@ -26,6 +26,7 @@ namespace Config
 	extern bool fpsCounter;
 	extern bool palettizedTextures;
 	extern bool dialogColors;
+	extern bool fastWriteOnlyLocks;
 	extern unsigned cpuAffinity;         // CPU core bit mask, 0 = app (unchanged)
 	extern unsigned cpuSpeed;            // reported CPU speed in MHz, 0 = app (unchanged)
 	extern unsigned videoMemory;         // reported video memory in MB, 0 = app (unchanged)
