@@ -290,6 +290,20 @@ namespace DDraw
 				" (lows exclude pauses of 1 s or more)",
 				g_sessionFrames, seconds, (g_sessionFrames - 1) / seconds, low1, low01);
 			Compat::Log() << text;
+
+			// A few long frames are loading hitches; many of them mean real stutter during play.
+			unsigned over50 = 0;
+			unsigned over100 = 0;
+			unsigned over250 = 0;
+			for (const float frameTimeMs : g_sessionFrameTimesMs)
+			{
+				over50 += frameTimeMs > 50;
+				over100 += frameTimeMs > 100;
+				over250 += frameTimeMs > 250;
+			}
+			sprintf_s(text, "Long frames: %u over 50 ms, %u over 100 ms, %u over 250 ms (out of %u)",
+				over50, over100, over250, static_cast<unsigned>(g_sessionFrameTimesMs.size()));
+			Compat::Log() << text;
 		}
 
 		void onFlip()
