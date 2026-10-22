@@ -463,8 +463,9 @@ namespace Gdi
 			for (auto it = g_windowZOrder.rbegin(); it != g_windowZOrder.rend(); ++it)
 			{
 				auto& window = **it;
-				if (!window.isLayered)
+				if (!window.isLayered || window.visibleRegion.isEmpty())
 				{
+					// Hidden layered windows (tooltips, closed menus) would only cost a GetDC of the back buffer.
 					continue;
 				}
 

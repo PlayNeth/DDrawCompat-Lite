@@ -329,9 +329,11 @@ namespace D3dDdi
 			if (data.Flags.Discard && !data.Flags.ReadOnly && !data.Flags.AreaValid && !data.Flags.RangeValid &&
 				!data.Flags.BoxValid)
 			{
-				// The game discards the old contents of the whole surface, so there is nothing to read back.
+				// The game discards the old contents of the whole surface, so there is nothing to read back
+				// (pending write-only lock pixels are part of those old contents too).
 				++Stats::g_discardedReadbacks;
 				lockData.isSysMemUpToDate = true;
+				lockData.hasPendingKeyedWrites = false;
 			}
 			else if (lockData.hasPendingKeyedWrites && data.Flags.WriteOnly && !data.Flags.ReadOnly)
 			{
@@ -346,6 +348,7 @@ namespace D3dDdi
 				DDraw::Blitter::colorFill(lockData.data, lockData.pitch, surface.Width, surface.Height,
 					m_formatInfo.bytesPerPixel, key);
 				lockData.hasPendingKeyedWrites = true;
+				lockData.pendingWritesKey = key;
 				++Stats::g_keyedWriteLocks;
 			}
 			else
@@ -452,16 +455,6 @@ namespace D3dDdi
 		{
 			LOG_ONCE("ERROR: Resource::copySubResource failed: " << Compat::hex(result));
 		}
-		const bool isReadback = dstResource == m_lockResource.get();
-		const unsigned long long bytes = static_cast<unsigned long long>(rect.right) * rect.bottom * m_formatInfo.bytesPerPixel;
-		const long long qpcTime = Time::queryPerformanceCounter() - qpcStart;
-		for (auto transfer : { isReadback ? &Stats::g_readbacks : &Stats::g_uploads,
-			isReadback ? &getStats().readbacks : &getStats().uploads })
-		{
-			++transfer->count;
-			transfer->bytes += bytes;
-			transfer->qpcTime += qpcTime;
-		}
 
 		D3DDDIARG_LOCK lock = {};
 		lock.hResource = m_lockResource.get();
@@ -474,6 +467,18 @@ namespace D3dDdi
 		unlock.SubResourceIndex = subResourceIndex;
 		unlock.Flags.NotifyOnly = 1;
 		m_device.getOrigVtable().pfnUnlock(m_device, &unlock);
+
+		// Timed up to here: the lock of the system memory copy is where a readback waits for the GPU.
+		const bool isReadback = dstResource == m_lockResource.get();
+		const unsigned long long bytes = static_cast<unsigned long long>(rect.right) * rect.bottom * m_formatInfo.bytesPerPixel;
+		const long long qpcTime = Time::queryPerformanceCounter() - qpcStart;
+		for (auto transfer : { isReadback ? &Stats::g_readbacks : &Stats::g_uploads,
+			isReadback ? &getStats().readbacks : &getStats().uploads })
+		{
+			++transfer->count;
+			transfer->bytes += bytes;
+			transfer->qpcTime += qpcTime;
+		}
 
 		return LOG_RESULT(result);
 	}
@@ -493,10 +498,9 @@ namespace D3dDdi
 		auto& lockData = m_lockData[subResourceIndex];
 		if (lockData.hasPendingKeyedWrites)
 		{
-			// Only the pixels written during write-only locks; the rest still holds the key color.
-			DWORD key = 0;
-			getWriteOnlyLockKey(key);
-			copySubResource(m_handle, m_lockResource.get(), subResourceIndex, &key);
+			// Only the pixels written during write-only locks; the rest still holds the key color. The key
+			// is the one used for the fill, even if the conditions for using it have changed since.
+			copySubResource(m_handle, m_lockResource.get(), subResourceIndex, &lockData.pendingWritesKey);
 			lockData.hasPendingKeyedWrites = false;
 			lockData.isVidMemUpToDate = true;
 			return;
@@ -772,6 +776,15 @@ namespace D3dDdi
 
 	void Resource::setAsGdiResource(bool isGdiResource)
 	{
+		// Pixels from write-only locks exist only in the system memory copy that is about to be replaced.
+		for (UINT i = 0; i < m_lockData.size(); ++i)
+		{
+			if (m_lockResource && m_lockData[i].hasPendingKeyedWrites && 0 == m_lockData[i].lockCount)
+			{
+				copyToVidMem(i);
+			}
+		}
+
 		m_lockResource.reset();
 		m_lockData.clear();
 		m_lockBuffer.reset();

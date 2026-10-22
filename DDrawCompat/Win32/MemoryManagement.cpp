@@ -28,6 +28,11 @@ namespace
 		LOG_FUNC("GlobalMemoryStatus", lpBuffer);
 		CALL_ORIG_FUNC(GlobalMemoryStatus)(lpBuffer);
 		overridePhysicalMemory(lpBuffer->dwTotalPhys, lpBuffer->dwAvailPhys);
+		if (0 != Config::systemMemory && lpBuffer->dwTotalPhys)
+		{
+			lpBuffer->dwMemoryLoad = static_cast<DWORD>(
+				100 - static_cast<ULONGLONG>(lpBuffer->dwAvailPhys) * 100 / lpBuffer->dwTotalPhys);
+		}
 		limitTo2Gb(lpBuffer->dwTotalPhys);
 		limitTo2Gb(lpBuffer->dwAvailPhys);
 		limitTo2Gb(lpBuffer->dwTotalPageFile);

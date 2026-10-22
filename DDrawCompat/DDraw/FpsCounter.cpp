@@ -40,6 +40,7 @@ namespace
 	// readback and upload of the back buffer on every frame.
 	CompatPtr<IDirectDrawSurface7> g_textSurface;
 	void* g_textSurfaceDd = nullptr;
+	void* g_lastBackBuffer = nullptr;
 	SIZE g_textSurfaceSize = {};
 	bool g_isTextSurfaceDirty = true;
 
@@ -165,23 +166,29 @@ namespace DDraw
 				return;
 			}
 
-			CompatPtr<IUnknown> ddUnknown;
-			surface->GetDDInterface(&surface, reinterpret_cast<void**>(&ddUnknown.getRef()));
-			if (!ddUnknown)
-			{
-				return;
-			}
-			IDirectDraw7* ddRaw = nullptr;
-			ddUnknown->QueryInterface(ddUnknown, IID_IDirectDraw7, reinterpret_cast<void**>(&ddRaw));
-			CompatPtr<IDirectDraw7> dd(ddRaw);
-			if (!dd)
-			{
-				return;
-			}
-
-			if (g_textSurface && (dd.get() != g_textSurfaceDd || FAILED(g_textSurface->IsLost(g_textSurface))))
+			// The DirectDraw object only needs to be looked up when the text surface must be (re)created.
+			if (g_textSurface && (&surface != g_lastBackBuffer || FAILED(g_textSurface->IsLost(g_textSurface))))
 			{
 				releaseResources();
+			}
+			g_lastBackBuffer = &surface;
+
+			CompatPtr<IDirectDraw7> dd;
+			if (!g_textSurface)
+			{
+				CompatPtr<IUnknown> ddUnknown;
+				surface->GetDDInterface(&surface, reinterpret_cast<void**>(&ddUnknown.getRef()));
+				if (!ddUnknown)
+				{
+					return;
+				}
+				IDirectDraw7* ddRaw = nullptr;
+				ddUnknown->QueryInterface(ddUnknown, IID_IDirectDraw7, reinterpret_cast<void**>(&ddRaw));
+				dd.reset(ddRaw);
+				if (!dd)
+				{
+					return;
+				}
 			}
 
 			const LONG height = std::max<LONG>(12, static_cast<LONG>(surfaceHeight) / 45);
@@ -201,11 +208,18 @@ namespace DDraw
 				const SIZE size = { (textSize.cx + 2 * margin + 63) / 64 * 64, textSize.cy + margin };
 				if (g_textSurface && (size.cx != g_textSurfaceSize.cx || size.cy != g_textSurfaceSize.cy))
 				{
-					releaseResources();
+					// Recreate it with the DirectDraw object it was created with (same back buffer).
+					dd = CompatPtr<IDirectDraw7>::from(static_cast<IDirectDraw7*>(g_textSurfaceDd));
+					g_textSurface.release();
+					g_textSurfaceDd = nullptr;
 				}
 
 				if (!g_textSurface)
 				{
+					if (!dd)
+					{
+						return;
+					}
 					DDSURFACEDESC2 desc = {};
 					desc.dwSize = sizeof(desc);
 					desc.dwFlags = DDSD_CAPS | DDSD_WIDTH | DDSD_HEIGHT | DDSD_PIXELFORMAT;
@@ -250,6 +264,7 @@ namespace DDraw
 		{
 			g_textSurface.release();
 			g_textSurfaceDd = nullptr;
+			g_lastBackBuffer = nullptr;
 			g_isTextSurfaceDirty = true;
 		}
 

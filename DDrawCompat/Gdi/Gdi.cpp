@@ -56,6 +56,12 @@ namespace Gdi
 			return false;
 		}
 		const HWND hwnd = CALL_ORIG_FUNC(WindowFromDC)(dc);
+		if (!hwnd)
+		{
+			// Screen DCs (GetDC(nullptr), CreateDC("DISPLAY")); skipping the window queries also keeps
+			// them from overwriting the game's last error.
+			return true;
+		}
 		return !(CALL_ORIG_FUNC(GetWindowLongA)(hwnd, GWL_EXSTYLE) & WS_EX_LAYERED) &&
 			MENU_ATOM != GetClassLong(hwnd, GCW_ATOM);
 	}

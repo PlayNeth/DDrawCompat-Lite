@@ -1,3 +1,4 @@
+#include <algorithm>
 #include <string>
 #include <vector>
 
@@ -66,7 +67,7 @@ namespace
 			result = origChangeDisplaySettingsEx(lpszDeviceName, lpDevMode, hwnd, dwflags, lParam);
 		}
 
-		if (SUCCEEDED(result) && !(dwflags & CDS_TEST))
+		if (DISP_CHANGE_SUCCESSFUL == result && !(dwflags & CDS_TEST))
 		{
 			if (lpDevMode)
 			{
@@ -193,7 +194,14 @@ namespace
 			dm.dmSize = sizeof(dm);
 			while (origEnumDisplaySettingsEx(lpszDeviceName, modeNum, &dm, dwFlags))
 			{
-				if (32 == dm.dmBitsPerPel)
+				// Modern drivers list each mode several times (scaling and stereo variants); old games
+				// often keep the mode list in a small fixed-size array, so leave out exact duplicates.
+				const bool isDuplicate = 32 == dm.dmBitsPerPel && std::any_of(devModes.begin(), devModes.end(),
+					[&](const DevMode& m) {
+						return m.dmPelsWidth == dm.dmPelsWidth && m.dmPelsHeight == dm.dmPelsHeight &&
+							m.dmDisplayFrequency == dm.dmDisplayFrequency && m.dmDisplayFlags == dm.dmDisplayFlags;
+					});
+				if (32 == dm.dmBitsPerPel && !isDuplicate)
 				{
 					dm.dmBitsPerPel = 8;
 					devModes.push_back(dm);

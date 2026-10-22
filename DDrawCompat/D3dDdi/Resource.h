@@ -91,6 +91,7 @@ namespace D3dDdi
 			bool isSysMemUpToDate;
 			bool isVidMemUpToDate;
 			bool hasPendingKeyedWrites;
+			DWORD pendingWritesKey;
 		};
 
 		class ResourceDeleter

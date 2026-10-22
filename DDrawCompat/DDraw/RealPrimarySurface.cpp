@@ -219,7 +219,9 @@ namespace
 		// colors in the other entries, let them use all of it (icons and bitmaps keep their colors).
 		Gdi::VirtualScreen::setDefaultPaletteFull(isDialogColorsActive);
 
-		if (isDialogColorsActive && src == DDraw::PrimarySurface::getGdiSurface())
+		// Listing the windows is only needed when the palettes differ, which most games never cause.
+		if (isDialogColorsActive && src == DDraw::PrimarySurface::getGdiSurface() &&
+			Gdi::Palette::isSystemPaletteDifferent())
 		{
 			GdiWindowEnumData data = { GetCurrentProcessId(), DDraw::PrimarySurface::getDeviceWindow() };
 			EnumWindows(addGdiWindowRegion, reinterpret_cast<LPARAM>(&data));

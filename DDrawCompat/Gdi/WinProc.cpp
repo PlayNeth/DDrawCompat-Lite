@@ -105,7 +105,7 @@ namespace
 	{
 		if (GWL_WNDPROC == nIndex)
 		{
-			Compat::ScopedSrwLockExclusive lock(g_windowProcSrwLock);
+			Compat::ScopedSrwLockShared lock(g_windowProcSrwLock);
 			auto it = g_windowProc.find(hWnd);
 			if (it != g_windowProc.end())
 			{
@@ -127,10 +127,13 @@ namespace
 		return LOG_RESULT(getWindowLong(hWnd, nIndex, CALL_ORIG_FUNC(GetWindowLongW), &WindowProc::wndProcW));
 	}
 
+	// Called for every message of every subclassed window: a shared lock and a plain lookup (operator[]
+	// would also insert entries for messages arriving after WM_NCDESTROY, which were never removed).
 	WindowProc getWindowProc(HWND hwnd)
 	{
-		Compat::ScopedSrwLockExclusive lock(g_windowProcSrwLock);
-		return g_windowProc[hwnd];
+		Compat::ScopedSrwLockShared lock(g_windowProcSrwLock);
+		auto it = g_windowProc.find(hwnd);
+		return it != g_windowProc.end() ? it->second : WindowProc{};
 	}
 
 	bool isTopLevelWindow(HWND hwnd)
@@ -147,14 +150,14 @@ namespace
 			return false;
 		}
 
-		auto it = g_windowProc.find(hwnd);
-		if (it == g_windowProc.end())
+		const WindowProc wndProc = getWindowProc(hwnd);
+		if (!wndProc.wndProcA && !wndProc.wndProcW)
 		{
 			return false;
 		}
 
 		return GetModuleHandle("comctl32") != Compat::getModuleHandleFromAddress(
-			IsWindowUnicode(hwnd) ? it->second.wndProcW : it->second.wndProcA);
+			IsWindowUnicode(hwnd) ? wndProc.wndProcW : wndProc.wndProcA);
 	}
 
 	void CALLBACK objectCreateEvent(

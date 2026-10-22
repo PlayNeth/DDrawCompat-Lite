@@ -139,14 +139,14 @@ namespace
 		return DD_OK;
 	}
 
+	// Reports the configured size, minus what the game has actually used, so free memory still drops
+	// as the game allocates surfaces.
 	void overrideVidMem(DWORD& total, DWORD& free)
 	{
 		const DWORD size = Config::videoMemory * 1024 * 1024;
+		const DWORD used = total > free ? total - free : 0;
 		total = size;
-		if (free > size)
-		{
-			free = size;
-		}
+		free = size > used ? size - used : 0;
 	}
 
 	template <typename TDirectDraw, typename TDdsCaps>

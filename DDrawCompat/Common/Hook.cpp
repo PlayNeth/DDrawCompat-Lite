@@ -215,7 +215,8 @@ namespace
 		targetFunc[0] = 0xE9;
 		reinterpret_cast<int&>(targetFunc[1]) = static_cast<BYTE*>(newFuncPtr) - (targetFunc + 5);
 		memset(targetFunc + 5, 0xCC, totalInstructionSize - 5);
-		VirtualProtect(targetFunc, totalInstructionSize, PAGE_EXECUTE_READ, &oldProtect);
+		// Restore the page's own protection (it may hold writable data too, or be copy-on-write).
+		VirtualProtect(targetFunc, totalInstructionSize, oldProtect, &oldProtect);
 
 		FlushInstructionCache(GetCurrentProcess(), nullptr, 0);
 

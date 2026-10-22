@@ -12,6 +12,7 @@ namespace Gdi
 		std::vector<PALETTEENTRY> getHardwarePalette();
 		std::vector<PALETTEENTRY> getSystemPalette();
 		std::vector<RECT> getGdiWindowRects();
+		bool isSystemPaletteDifferent();
 		void installHooks();
 		void setGdiWindowRects(std::vector<RECT> rects);
 		void setHardwarePalette(PALETTEENTRY* entries);

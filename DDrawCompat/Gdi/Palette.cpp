@@ -324,6 +324,21 @@ namespace Gdi
 			return g_gdiWindowRects;
 		}
 
+		// True if GDI windows would be shown differently with the system palette than with the hardware
+		// palette, i.e. the game overwrote some of the static colors.
+		bool isSystemPaletteDifferent()
+		{
+			Compat::ScopedSrwLockShared lock(g_srwLock);
+			for (UINT i = 0; i < 256; ++i)
+			{
+				if (!isSameColor(g_systemPalette[i], g_hardwarePalette[i]))
+				{
+					return true;
+				}
+			}
+			return false;
+		}
+
 		void setGdiWindowRects(std::vector<RECT> rects)
 		{
 			Compat::ScopedSrwLockExclusive lock(g_srwLock);
